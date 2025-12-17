@@ -1,14 +1,15 @@
 /// \file
-/// Wrappers for MPI functions.  This should be the only compilation 
-/// unit in the code that directly calls MPI functions.  To build a pure
-/// serial version of the code with no MPI, do not define DO_MPI.  If
-/// DO_MPI is not defined then all MPI functionality is replaced with
-/// equivalent single task behavior.
+/// Wrappers for MPI functions with oneCCL integration for collective operations.
+/// This version uses oneCCL for Allreduce operations where sensible.
 
 #include "parallel.h"
 
 #ifdef DO_MPI
 #include <mpi.h>
+#endif
+
+#ifdef USE_ONECCL
+#include <oneapi/ccl.hpp>
 #endif
 
 #include <stdio.h>
@@ -25,7 +26,46 @@ static int nRanks = 1;
 #else
 #define REAL_MPI_TYPE MPI_DOUBLE
 #endif
+#endif
 
+#ifdef USE_ONECCL
+// oneCCL communicator and related objects
+static ccl::communicator* ccl_comm = nullptr;
+static ccl::shared_ptr_class<ccl::kvs> kvs;
+static bool ccl_initialized = false;
+
+// Initialize oneCCL
+static void initOneCCL() {
+    if (ccl_initialized) return;
+    
+    ccl::init();
+    
+    // Get KVS address from rank 0 and broadcast to all ranks
+    ccl::kvs::address_type main_addr;
+    if (myRank == 0) {
+        kvs = ccl::create_main_kvs();
+        main_addr = kvs->get_address();
+    }
+    
+#ifdef DO_MPI
+    MPI_Bcast(main_addr.data(), main_addr.size(), MPI_BYTE, 0, MPI_COMM_WORLD);
+#endif
+    
+    if (myRank != 0) {
+        kvs = ccl::create_kvs(main_addr);
+    }
+    
+    ccl_comm = new ccl::communicator(ccl::create_communicator(nRanks, myRank, kvs));
+    ccl_initialized = true;
+}
+
+static void destroyOneCCL() {
+    if (ccl_comm) {
+        delete ccl_comm;
+        ccl_comm = nullptr;
+    }
+    ccl_initialized = false;
+}
 #endif
 
 int getNRanks()
@@ -67,10 +107,18 @@ void initParallel(int* argc, char*** argv)
    MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
    MPI_Comm_size(MPI_COMM_WORLD, &nRanks);
 #endif
+
+#ifdef USE_ONECCL
+   initOneCCL();
+#endif
 }
 
 void destroyParallel()
 {
+#ifdef USE_ONECCL
+   destroyOneCCL();
+#endif
+
 #ifdef DO_MPI
    MPI_Finalize();
 #endif
@@ -112,7 +160,10 @@ int sendReceiveParallel(void* sendBuf, int sendLen, int dest,
 
 void addIntParallel(int* sendBuf, int* recvBuf, int count)
 {
-#ifdef DO_MPI
+#ifdef USE_ONECCL
+   // Use oneCCL for Allreduce
+   ccl::allreduce(sendBuf, recvBuf, count, ccl::reduction::sum, *ccl_comm).wait();
+#elif defined(DO_MPI)
    MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 #else
    for (int ii=0; ii<count; ++ii)
@@ -122,7 +173,10 @@ void addIntParallel(int* sendBuf, int* recvBuf, int count)
 
 void addRealParallel(real_t* sendBuf, real_t* recvBuf, int count)
 {
-#ifdef DO_MPI
+#ifdef USE_ONECCL
+   // Use oneCCL for Allreduce
+   ccl::allreduce(sendBuf, recvBuf, count, ccl::reduction::sum, *ccl_comm).wait();
+#elif defined(DO_MPI)
    MPI_Allreduce(sendBuf, recvBuf, count, REAL_MPI_TYPE, MPI_SUM, MPI_COMM_WORLD);
 #else
    for (int ii=0; ii<count; ++ii)
@@ -132,7 +186,10 @@ void addRealParallel(real_t* sendBuf, real_t* recvBuf, int count)
 
 void addDoubleParallel(double* sendBuf, double* recvBuf, int count)
 {
-#ifdef DO_MPI
+#ifdef USE_ONECCL
+   // Use oneCCL for Allreduce
+   ccl::allreduce(sendBuf, recvBuf, count, ccl::reduction::sum, *ccl_comm).wait();
+#elif defined(DO_MPI)
    MPI_Allreduce(sendBuf, recvBuf, count, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 #else
    for (int ii=0; ii<count; ++ii)
@@ -142,7 +199,10 @@ void addDoubleParallel(double* sendBuf, double* recvBuf, int count)
 
 void maxIntParallel(int* sendBuf, int* recvBuf, int count)
 {
-#ifdef DO_MPI
+#ifdef USE_ONECCL
+   // Use oneCCL for Allreduce with max
+   ccl::allreduce(sendBuf, recvBuf, count, ccl::reduction::max, *ccl_comm).wait();
+#elif defined(DO_MPI)
    MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 #else
    for (int ii=0; ii<count; ++ii)
@@ -150,9 +210,9 @@ void maxIntParallel(int* sendBuf, int* recvBuf, int count)
 #endif
 }
 
-
 void minRankDoubleParallel(RankReduceData* sendBuf, RankReduceData* recvBuf, int count)
 {
+   // oneCCL doesn't support MINLOC directly, fall back to MPI
 #ifdef DO_MPI
    MPI_Allreduce(sendBuf, recvBuf, count, MPI_DOUBLE_INT, MPI_MINLOC, MPI_COMM_WORLD);
 #else
@@ -166,6 +226,7 @@ void minRankDoubleParallel(RankReduceData* sendBuf, RankReduceData* recvBuf, int
 
 void maxRankDoubleParallel(RankReduceData* sendBuf, RankReduceData* recvBuf, int count)
 {
+   // oneCCL doesn't support MAXLOC directly, fall back to MPI
 #ifdef DO_MPI
    MPI_Allreduce(sendBuf, recvBuf, count, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
 #else
@@ -194,4 +255,11 @@ int builtWithMpi(void)
 #endif
 }
 
-
+int builtWithOneCCL(void)
+{
+#ifdef USE_ONECCL
+   return 1;
+#else
+   return 0;
+#endif
+}

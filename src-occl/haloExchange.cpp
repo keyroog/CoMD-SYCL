@@ -28,23 +28,29 @@
 /// network links would likely benefit from alternate halo exchange
 /// strategies that send independent messages to each neighbor task.
 
+#include <sycl/sycl.hpp>
+
+extern "C" {
 #include "haloExchange.h"
-
-#include <assert.h>
-#include <stdio.h>
-
-#include "CoMDTypes.h"
 #include "decomposition.h"
-#include "parallel.h"
-#include "defines.h"
 #include "linkCells.h"
 #include "hashTable.h"
 #include "neighborList.h"
 #include "eam.h"
 #include "memUtils.h"
 #include "performanceTimers.h"
+}
 
+#include <assert.h>
+#include <stdio.h>
+
+#include "CoMDTypes.h"
+#include "parallel.h"
+#include "defines.h"
 #include "gpu_kernels.h"
+
+// Access to the global SYCL queue
+extern sycl::queue* g_sycl_queue;
 
 #define MAX(A,B) ((A) > (B) ? (A) : (B))
 
@@ -120,16 +126,11 @@ HaloExchange* initAtomHaloExchange(Domain* domain, LinkCell* boxes)
    maxSize = MAX(size1, size2);
    hh->bufCapacity = maxSize*2*MAXATOMS*sizeof(AtomMsg);
    
-   hh->sendBufM = (char*)comdMalloc(hh->bufCapacity);
-   hh->sendBufP = (char*)comdMalloc(hh->bufCapacity);
-   hh->recvBufP = (char*)comdMalloc(hh->bufCapacity);
-   hh->recvBufM = (char*)comdMalloc(hh->bufCapacity);
-
-   // pin memory
-   cudaHostRegister(hh->sendBufM, hh->bufCapacity, 0);
-   cudaHostRegister(hh->sendBufP, hh->bufCapacity, 0);
-   cudaHostRegister(hh->recvBufP, hh->bufCapacity, 0);
-   cudaHostRegister(hh->recvBufM, hh->bufCapacity, 0);
+   // Use SYCL pinned (host) memory for efficient DMA transfers
+   hh->sendBufM = (char*)sycl::malloc_host(hh->bufCapacity, *g_sycl_queue);
+   hh->sendBufP = (char*)sycl::malloc_host(hh->bufCapacity, *g_sycl_queue);
+   hh->recvBufP = (char*)sycl::malloc_host(hh->bufCapacity, *g_sycl_queue);
+   hh->recvBufM = (char*)sycl::malloc_host(hh->bufCapacity, *g_sycl_queue);
 
    hh->loadBuffer = loadAtomsBuffer;
    hh->unloadBuffer = unloadAtomsBuffer;
@@ -149,9 +150,9 @@ HaloExchange* initAtomHaloExchange(Domain* domain, LinkCell* boxes)
    for (int ii=0; ii<6; ++ii) {
       parms->cellList[ii] = mkAtomCellList(boxes, (enum HaloFaceOrder)ii, parms->nCells[ii]);
 	  
-      // copy cell list to gpu
-      cudaMalloc((void**)&parms->cellListGpu[ii], parms->nCells[ii] * sizeof(int));
-      cudaMemcpy(parms->cellListGpu[ii], parms->cellList[ii], parms->nCells[ii] * sizeof(int), cudaMemcpyHostToDevice);
+      // copy cell list to gpu (SYCL)
+      parms->cellListGpu[ii] = sycl::malloc_device<int>(parms->nCells[ii], *g_sycl_queue);
+      g_sycl_queue->memcpy(parms->cellListGpu[ii], parms->cellList[ii], parms->nCells[ii] * sizeof(int)).wait();
   
    }
    // allocate scan buf
@@ -161,9 +162,10 @@ HaloExchange* initAtomHaloExchange(Domain* domain, LinkCell* boxes)
    int partial_size = size/256 + 1;
    if (partial_size % 256 != 0) partial_size = ((partial_size + 255)/256)*256;
 
-   cudaMalloc((void**)&parms->d_natoms_buf, size * sizeof(int));
+   // SYCL device memory allocation
+   parms->d_natoms_buf = sycl::malloc_device<int>(size, *g_sycl_queue);
    parms->h_natoms_buf = (int*) malloc( size * sizeof(int));
-   cudaMalloc((void**)&parms->d_partial_sums, partial_size * sizeof(int));
+   parms->d_partial_sums = sycl::malloc_device<int>(partial_size, *g_sycl_queue);
 
    for (int ii=0; ii<6; ++ii)
    {
@@ -220,16 +222,11 @@ HaloExchange* initForceHaloExchange(Domain* domain, LinkCell* boxes, int useGPU)
    maxSize = MAX(size1, size2);
    hh->bufCapacity = (maxSize)*MAXATOMS*sizeof(ForceMsg);
 
-   hh->sendBufM = (char*)comdMalloc(hh->bufCapacity);
-   hh->sendBufP = (char*)comdMalloc(hh->bufCapacity);
-   hh->recvBufP = (char*)comdMalloc(hh->bufCapacity);
-   hh->recvBufM = (char*)comdMalloc(hh->bufCapacity);
-
-   // pin memory
-   cudaHostRegister(hh->sendBufM, hh->bufCapacity, 0);
-   cudaHostRegister(hh->sendBufP, hh->bufCapacity, 0);
-   cudaHostRegister(hh->recvBufP, hh->bufCapacity, 0);
-   cudaHostRegister(hh->recvBufM, hh->bufCapacity, 0);
+   // SYCL: use pinned host memory for better transfer performance
+   hh->sendBufM = (char*)sycl::malloc_host(hh->bufCapacity, *g_sycl_queue);
+   hh->sendBufP = (char*)sycl::malloc_host(hh->bufCapacity, *g_sycl_queue);
+   hh->recvBufP = (char*)sycl::malloc_host(hh->bufCapacity, *g_sycl_queue);
+   hh->recvBufM = (char*)sycl::malloc_host(hh->bufCapacity, *g_sycl_queue);
 
    ForceExchangeParms* parms = (ForceExchangeParms*)comdMalloc(sizeof(ForceExchangeParms));
 
@@ -245,17 +242,19 @@ HaloExchange* initForceHaloExchange(Domain* domain, LinkCell* boxes, int useGPU)
       parms->sendCells[ii] = mkForceSendCellList(boxes, ii, parms->nCells[ii]);
       parms->recvCells[ii] = mkForceRecvCellList(boxes, ii, parms->nCells[ii]);
 
-      // copy cell list to gpu
-      cudaMalloc((void**)&parms->sendCellsGpu[ii], parms->nCells[ii] * sizeof(int));
-      cudaMalloc((void**)&parms->recvCellsGpu[ii], parms->nCells[ii] * sizeof(int));
-      cudaMemcpy(parms->sendCellsGpu[ii], parms->sendCells[ii], parms->nCells[ii] * sizeof(int), cudaMemcpyHostToDevice);
-      cudaMemcpy(parms->recvCellsGpu[ii], parms->recvCells[ii], parms->nCells[ii] * sizeof(int), cudaMemcpyHostToDevice);
+      // copy cell list to gpu (SYCL)
+      parms->sendCellsGpu[ii] = sycl::malloc_device<int>(parms->nCells[ii], *g_sycl_queue);
+      parms->recvCellsGpu[ii] = sycl::malloc_device<int>(parms->nCells[ii], *g_sycl_queue);
+      g_sycl_queue->memcpy(parms->sendCellsGpu[ii], parms->sendCells[ii], parms->nCells[ii] * sizeof(int));
+      g_sycl_queue->memcpy(parms->recvCellsGpu[ii], parms->recvCells[ii], parms->nCells[ii] * sizeof(int));
 
       // allocate temp buf
       int size = parms->nCells[ii]+1;
       if (size % 256 != 0) size = ((size + 255)/256)*256;
-      cudaMalloc((void**)&parms->natoms_buf[ii], size * sizeof(int));
-      cudaMalloc((void**)&parms->partial_sums[ii], (size/256 + 1) * sizeof(int));
+      parms->natoms_buf[ii] = sycl::malloc_device<int>(size, *g_sycl_queue);
+      parms->partial_sums[ii] = sycl::malloc_device<int>(size/256 + 1, *g_sycl_queue);
+   }
+   g_sycl_queue->wait();
    }
    
    hh->hashTable = NULL;
@@ -269,10 +268,11 @@ void destroyHaloExchange(HaloExchange** haloExchange)
    (*haloExchange)->destroy((*haloExchange)->parms);
    if((*haloExchange)->hashTable);
      destroyHashTable(&((*haloExchange)->hashTable));
-   free((*haloExchange)->sendBufM);
-   free((*haloExchange)->sendBufP);
-   free((*haloExchange)->recvBufP);
-   free((*haloExchange)->recvBufM);
+   // Use sycl::free for pinned memory allocated with sycl::malloc_host
+   sycl::free((*haloExchange)->sendBufM, *g_sycl_queue);
+   sycl::free((*haloExchange)->sendBufP, *g_sycl_queue);
+   sycl::free((*haloExchange)->recvBufP, *g_sycl_queue);
+   sycl::free((*haloExchange)->recvBufM, *g_sycl_queue);
 
    free(*haloExchange);
    *haloExchange = NULL;
@@ -429,11 +429,12 @@ int loadAtomsBuffer(void* vparms, void* data, int face, char* charBuf)
    }else{
            int* d_cellList = parms->cellListGpu[face];
 
-           nTotalAtomsCellList = compactCellsGpu(sim->gpu_atoms_buf, nCells, d_cellList, sim->gpu,  parms->d_natoms_buf, parms->d_partial_sums,shift,sim->boundary_stream);
+           nTotalAtomsCellList = compactCellsGpu(sim->gpu_atoms_buf, nCells, d_cellList, sim->gpu,  parms->d_natoms_buf, parms->d_partial_sums,shift);
 //           printf("gpu: %d\n",nTotalAtomsCellList);
 
-           cudaMemcpyAsync(charBuf, (void*)(sim->gpu_atoms_buf), nTotalAtomsCellList * sizeof(AtomMsg), cudaMemcpyDeviceToHost,sim->boundary_stream);
-           cudaStreamSynchronize(sim->boundary_stream);
+           // SYCL async memcpy device to host
+           g_sycl_queue->memcpy(charBuf, (void*)(sim->gpu_atoms_buf), nTotalAtomsCellList * sizeof(AtomMsg));
+           g_sycl_queue->wait();
    }
    return nTotalAtomsCellList*sizeof(AtomMsg);
 }
@@ -486,7 +487,7 @@ void unloadAtomsBuffer(void* vparms, void* data, int face, int bufSize, char* ch
                    }
            }
    }else{
-      unloadAtomsBufferToGpu(charBuf, nBuf, sim, sim->gpu_atoms_buf, sim->boundary_stream);   
+      unloadAtomsBufferToGpu(charBuf, nBuf, sim, sim->gpu_atoms_buf);   
    }
 }
 
@@ -498,10 +499,10 @@ void destroyAtomsExchange(void* vparms)
    {
       free(parms->pbcFactor[ii]);
       free(parms->cellList[ii]);
-      cudaFree(parms->cellListGpu[ii]);
+      sycl::free(parms->cellListGpu[ii], *g_sycl_queue);
    }
-   cudaFree(parms->d_natoms_buf);
-   cudaFree(parms->d_partial_sums);
+   sycl::free(parms->d_natoms_buf, *g_sycl_queue);
+   sycl::free(parms->d_partial_sums, *g_sycl_queue);
    free(parms->h_natoms_buf);
 }
 
@@ -676,7 +677,7 @@ int loadForceBuffer(void* vparms, void* vdata, int face, char* charBuf)
    int* cellListGpu = parms->sendCellsGpu[face];
    int nBuf = 0;
 
-   loadForceBufferFromGpu(charBuf, &nBuf, nCells, cellListGpu, parms->natoms_buf[face], parms->partial_sums[face], s, s->gpu_force_buf, s->boundary_stream);
+   loadForceBufferFromGpu(charBuf, &nBuf, nCells, cellListGpu, parms->natoms_buf[face], parms->partial_sums[face], s, s->gpu_force_buf);
 
    return nBuf*sizeof(ForceMsg);
 }
@@ -697,7 +698,7 @@ void unloadForceBuffer(void* vparms, void* vdata, int face, int bufSize, char* c
    int* cellListGpu = parms->recvCellsGpu[face];
    int nBuf = bufSize / sizeof(ForceMsg);
   
-   unloadForceBufferToGpu(charBuf, nBuf, nCells, cellListGpu, parms->natoms_buf[face], parms->partial_sums[face], s, s->gpu_force_buf, s->boundary_stream);   
+   unloadForceBufferToGpu(charBuf, nBuf, nCells, cellListGpu, parms->natoms_buf[face], parms->partial_sums[face], s, s->gpu_force_buf);   
 }
 
 void destroyForceExchange(void* vparms)
@@ -708,10 +709,10 @@ void destroyForceExchange(void* vparms)
    {
       free(parms->sendCells[ii]);
       free(parms->recvCells[ii]);
-      cudaFree(parms->sendCellsGpu[ii]);
-      cudaFree(parms->recvCellsGpu[ii]);
-      cudaFree(parms->natoms_buf[ii]);
-      cudaFree(parms->partial_sums[ii]);
+      sycl::free(parms->sendCellsGpu[ii], *g_sycl_queue);
+      sycl::free(parms->recvCellsGpu[ii], *g_sycl_queue);
+      sycl::free(parms->natoms_buf[ii], *g_sycl_queue);
+      sycl::free(parms->partial_sums[ii], *g_sycl_queue);
    }
 }
 

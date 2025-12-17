@@ -1,22 +1,28 @@
 /// \file
 /// Leapfrog time integrator
 
+#include <sycl/sycl.hpp>
+
+extern "C" {
 #include "timestep.h"
-
-#include "CoMDTypes.h"
-
 #include "linkCells.h"
 #include "neighborList.h"
 #include "hashTable.h"
+#include "performanceTimers.h"
+}
+
+#include "CoMDTypes.h"
 #include "parallel.h"
 #include "defines.h"
-#include "performanceTimers.h"
-
 #include "gpu_kernels.h"
 #include "gpu_neighborList.h"
+#include "gpu_utility.h"
 
 #include <stdio.h>
 #include <assert.h>
+
+// Access to the global SYCL queue
+extern sycl::queue* g_sycl_queue;
 
 
 static   void advanceVelocityCpu(SimFlat* sim, int nBoxes, real_t dt);
@@ -221,7 +227,8 @@ void redistributeAtoms(SimFlat* sim)
 
 void redistributeAtomsGpu(SimFlat* sim)
 {
-    cudaMemset(sim->gpu.boxes.nAtoms + sim->boxes->nLocalBoxes, 0, (sim->boxes->nTotalBoxes - sim->boxes->nLocalBoxes) * sizeof(int));
+    // SYCL memset: zero out halo cells nAtoms
+    g_sycl_queue->memset(sim->gpu.boxes.nAtoms + sim->boxes->nLocalBoxes, 0, (sim->boxes->nTotalBoxes - sim->boxes->nLocalBoxes) * sizeof(int)).wait();
 
    if(sim->usePairlist)
    {
@@ -241,11 +248,11 @@ void redistributeAtomsGpu(SimFlat* sim)
 
 
 
-           buildAtomListGpu(sim, sim->boundary_stream);
+           buildAtomListGpu(sim);
        if(pairlistUpdateRequired)
        {
            // sort only boundary cells
-           sortAtomsGpu(sim, sim->boundary_stream);
+           sortAtomsGpu(sim);
        }
        return;
    }
@@ -257,11 +264,11 @@ void redistributeAtomsGpu(SimFlat* sim)
    if (sim->gpuAsync) {
      // only update neighbors list when method != 0
      if (sim->method != THREAD_ATOM) 
-       updateNeighborsGpuAsync(sim->gpu, sim->flags, sim->gpu.boxes.nLocalBoxes - sim->n_boundary_cells, sim->interior_cells, sim->interior_stream);
+       updateNeighborsGpuAsync(sim->gpu, sim->flags, sim->gpu.boxes.nLocalBoxes - sim->n_boundary_cells, sim->interior_cells);
 
      int n_interior_cells = sim->gpu.boxes.nLocalBoxes - sim->n_boundary_cells;
-     eamForce1GpuAsync(sim->gpu, sim->gpu.i_list, n_interior_cells, sim->interior_cells, sim->method, sim->interior_stream, sim->spline);
-     eamForce2GpuAsync(sim->gpu, sim->gpu.i_list, n_interior_cells, sim->interior_cells, sim->method, sim->interior_stream, sim->spline);
+     eamForce1GpuAsync(sim->gpu, sim->gpu.i_list, n_interior_cells, sim->interior_cells, sim->method, sim->spline);
+     eamForce2GpuAsync(sim->gpu, sim->gpu.i_list, n_interior_cells, sim->interior_cells, sim->method, sim->spline);
    }
 
    // exchange is only for boundaries
@@ -269,10 +276,10 @@ void redistributeAtomsGpu(SimFlat* sim)
    haloExchange(sim->atomExchange, sim);
    stopTimer(atomHaloTimer);
 
-   buildAtomListGpu(sim, sim->boundary_stream);
+   buildAtomListGpu(sim);
 
    // sort only boundary cells
-   sortAtomsGpu(sim, sim->boundary_stream);
+   sortAtomsGpu(sim);
 }
 
 void redistributeAtomsGpuNL(SimFlat* sim)
@@ -293,8 +300,8 @@ void redistributeAtomsGpuNL(SimFlat* sim)
    // now we can launch force computations on the interior
    if (sim->gpuAsync) {
      int n_interior_cells = sim->gpu.boxes.nLocalBoxes - sim->n_boundary_cells;
-     eamForce1GpuAsync(sim->gpu, sim->gpu.i_list, n_interior_cells, sim->interior_cells, sim->method, sim->interior_stream, sim->spline);
-     eamForce2GpuAsync(sim->gpu, sim->gpu.i_list, n_interior_cells, sim->interior_cells, sim->method, sim->interior_stream, sim->spline);
+     eamForce1GpuAsync(sim->gpu, sim->gpu.i_list, n_interior_cells, sim->interior_cells, sim->method, sim->spline);
+     eamForce2GpuAsync(sim->gpu, sim->gpu.i_list, n_interior_cells, sim->interior_cells, sim->method, sim->spline);
    }
 
    sim->gpu.d_hashTable.nEntriesGet = 0;
@@ -306,7 +313,7 @@ void redistributeAtomsGpuNL(SimFlat* sim)
 #ifdef DEBUG
    //count the number of interior particles on each process and sum them up
    int *nAtomsGPU  = (int*) malloc(sizeof(int) * sim->boxes->nTotalBoxes);
-   cudaCopyDtH(nAtomsGPU, sim->gpu.boxes.nAtoms, sim->boxes->nTotalBoxes * sizeof(int));
+   syclCopyDtH(nAtomsGPU, sim->gpu.boxes.nAtoms, sim->boxes->nTotalBoxes * sizeof(int));
    int sum = 0;
    int sumInt = 0;
    for(int i=0;i < sim->boxes->nTotalBoxes; ++i){
@@ -326,7 +333,7 @@ void redistributeAtomsGpuNL(SimFlat* sim)
    free(nAtomsGPU);
 #endif
    int haloExchangeRequired=0;
-   cudaMemcpy(&haloExchangeRequired, sim->gpu.d_updateLinkCellsRequired,sizeof(int), cudaMemcpyDeviceToHost); //TODO Async? boundary_stream
+   g_sycl_queue->memcpy(&haloExchangeRequired, sim->gpu.d_updateLinkCellsRequired, sizeof(int)).wait();
    int flag = 0; //indicates if any particle has migrated from one processor to the other 
    //sync boundary stream TODO
    addIntParallel(&haloExchangeRequired, &flag, 1); 
@@ -347,10 +354,10 @@ void redistributeAtomsGpuNL(SimFlat* sim)
            haloExchange(sim->atomExchange, sim);
            stopTimer(atomHaloTimer);
 
-           cudaMemset(sim->gpu.d_updateLinkCellsRequired,0,sizeof(int));
+           g_sycl_queue->memset(sim->gpu.d_updateLinkCellsRequired, 0, sizeof(int)).wait();
    }
 
-   buildAtomListGpu(sim, sim->boundary_stream);
+   buildAtomListGpu(sim);
 }
 
 void redistributeAtomsCpuNL(SimFlat* sim)

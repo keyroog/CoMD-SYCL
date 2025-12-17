@@ -1,7 +1,16 @@
 /// \file
 /// Functions to maintain link cell structures for fast pair finding.
 
+#include <sycl/sycl.hpp>
+
+extern "C" {
 #include "linkCells.h"
+#include "memUtils.h"
+#include "decomposition.h"
+#include "hashTable.h"
+#include "neighborList.h"
+#include "performanceTimers.h"
+}
 
 #include <stdio.h>
 #include <string.h>
@@ -9,15 +18,14 @@
 #include <math.h>
 
 #include "parallel.h"
-#include "memUtils.h"
-#include "decomposition.h"
 #include "defines.h"
-#include "hashTable.h"
 #include "mytype.h"
-#include "neighborList.h"
-#include "performanceTimers.h"
 #include "CoMDTypes.h"
 #include "gpu_kernels.h"
+#include "gpu_utility.h"
+
+// Access to the global SYCL queue
+extern sycl::queue* g_sycl_queue;
 
 #define   MIN(A,B) ((A) < (B) ? (A) : (B))
 #define   MAX(A,B) ((A) > (B) ? (A) : (B))
@@ -585,14 +593,16 @@ void updateGpuBoundaryCells(SimFlat *sim)
                       sim->host.atoms.p.z[iOff] = sim->atoms->p.z[iOff];
 
               }
-              cudaMemcpy((sim->gpu.atoms.r.x)+(iBox*MAXATOMS), (sim->host.atoms.r.x)+(iBox*MAXATOMS), f_size, cudaMemcpyHostToDevice);
-              cudaMemcpy((sim->gpu.atoms.r.y)+(iBox*MAXATOMS), (sim->host.atoms.r.y)+(iBox*MAXATOMS), f_size, cudaMemcpyHostToDevice);
-              cudaMemcpy((sim->gpu.atoms.r.z)+(iBox*MAXATOMS), (sim->host.atoms.r.z)+(iBox*MAXATOMS), f_size, cudaMemcpyHostToDevice);
-              cudaMemcpy((sim->gpu.atoms.p.x)+(iBox*MAXATOMS), (sim->host.atoms.p.x)+(iBox*MAXATOMS), f_size, cudaMemcpyHostToDevice);
-              cudaMemcpy((sim->gpu.atoms.p.y)+(iBox*MAXATOMS), (sim->host.atoms.p.y)+(iBox*MAXATOMS), f_size, cudaMemcpyHostToDevice);
-              cudaMemcpy((sim->gpu.atoms.p.z)+(iBox*MAXATOMS), (sim->host.atoms.p.z)+(iBox*MAXATOMS), f_size, cudaMemcpyHostToDevice);
+              // SYCL memcpy host to device
+              g_sycl_queue->memcpy((sim->gpu.atoms.r.x)+(iBox*MAXATOMS), (sim->host.atoms.r.x)+(iBox*MAXATOMS), f_size);
+              g_sycl_queue->memcpy((sim->gpu.atoms.r.y)+(iBox*MAXATOMS), (sim->host.atoms.r.y)+(iBox*MAXATOMS), f_size);
+              g_sycl_queue->memcpy((sim->gpu.atoms.r.z)+(iBox*MAXATOMS), (sim->host.atoms.r.z)+(iBox*MAXATOMS), f_size);
+              g_sycl_queue->memcpy((sim->gpu.atoms.p.x)+(iBox*MAXATOMS), (sim->host.atoms.p.x)+(iBox*MAXATOMS), f_size);
+              g_sycl_queue->memcpy((sim->gpu.atoms.p.y)+(iBox*MAXATOMS), (sim->host.atoms.p.y)+(iBox*MAXATOMS), f_size);
+              g_sycl_queue->memcpy((sim->gpu.atoms.p.z)+(iBox*MAXATOMS), (sim->host.atoms.p.z)+(iBox*MAXATOMS), f_size);
 
-              cudaMemcpy((sim->gpu.atoms.gid)+(iBox*MAXATOMS), (sim->atoms->gid)+(iBox*MAXATOMS), i_size, cudaMemcpyHostToDevice);
-              cudaMemcpy((sim->gpu.atoms.iSpecies)+(iBox*MAXATOMS), (sim->atoms->iSpecies)+(iBox*MAXATOMS), i_size, cudaMemcpyHostToDevice);
+              g_sycl_queue->memcpy((sim->gpu.atoms.gid)+(iBox*MAXATOMS), (sim->atoms->gid)+(iBox*MAXATOMS), i_size);
+              g_sycl_queue->memcpy((sim->gpu.atoms.iSpecies)+(iBox*MAXATOMS), (sim->atoms->iSpecies)+(iBox*MAXATOMS), i_size);
       }
+      g_sycl_queue->wait();
 }

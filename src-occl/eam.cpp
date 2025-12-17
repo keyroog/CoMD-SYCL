@@ -84,25 +84,30 @@
 /// be set (three components of the force vector instead of a single
 /// scalar \f$ F'(\bar\rho) \f$.
 
+#include <sycl/sycl.hpp>
 
+extern "C" {
 #include "eam.h"
+#include "constants.h"
+#include "memUtils.h"
+#include "linkCells.h"
+#include "neighborList.h"
+#include "performanceTimers.h"
+#include "haloExchange.h"
+}
 
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <assert.h>
 
-
 #include "defines.h"
-#include "constants.h"
-#include "memUtils.h"
 #include "parallel.h"
-#include "linkCells.h"
-#include "neighborList.h"
 #include "CoMDTypes.h"
-#include "performanceTimers.h"
-#include "haloExchange.h"
 #include "gpu_kernels.h"
+
+// Access to the global SYCL queue
+extern sycl::queue* g_sycl_queue;
 
 #define MAX(A,B) ((A) > (B) ? (A) : (B))
 
@@ -201,18 +206,19 @@ int eamForceGpu(SimFlat* s)
    if (s->gpuAsync) {   
      // only update neighbors list when method != 0
      if (s->method == WARP_ATOM || s->method == CTA_CELL) 
-       updateNeighborsGpuAsync(s->gpu, s->flags, s->n_boundary_cells, s->boundary_cells, s->boundary_stream);
+       updateNeighborsGpuAsync(s->gpu, s->flags, s->n_boundary_cells, s->boundary_cells);
 
      // interior stream already launched
-     eamForce1GpuAsync(s->gpu, s->gpu.b_list, s->n_boundary_cells, s->boundary_cells, s->method, s->boundary_stream, s->spline);
-     eamForce2GpuAsync(s->gpu, s->gpu.b_list, s->n_boundary_cells, s->boundary_cells, s->method, s->boundary_stream, s->spline);
+     eamForce1GpuAsync(s->gpu, s->gpu.b_list, s->n_boundary_cells, s->boundary_cells, s->method, s->spline);
+     eamForce2GpuAsync(s->gpu, s->gpu.b_list, s->n_boundary_cells, s->boundary_cells, s->method, s->spline);
 
      // we need boundary data before halo exchange
-     cudaStreamSynchronize(s->boundary_stream);
+     // SYCL: wait on queue instead of cudaStreamSynchronize
+     g_sycl_queue->wait();
 
      // now we can start step 3 on the interior
      int n_interior_cells = s->gpu.boxes.nLocalBoxes - s->n_boundary_cells;
-     eamForce3GpuAsync(s->gpu, s->gpu.i_list, n_interior_cells, s->interior_cells, s->method, s->interior_stream, s->spline);
+     eamForce3GpuAsync(s->gpu, s->gpu.i_list, n_interior_cells, s->interior_cells, s->method, s->spline);
    }
    else {
      // only update neighbors list when method != 0
@@ -247,13 +253,15 @@ int eamForceGpu(SimFlat* s)
 
      if (s->gpuAsync) {
        // we need updated interior data before 3rd step
-       cudaStreamSynchronize(s->boundary_stream);
+       // SYCL: wait on queue
+       g_sycl_queue->wait();
      }
  
      if (s->gpuAsync) {
        // interior stream already launched
-       eamForce3GpuAsync(s->gpu, s->gpu.b_list, s->n_boundary_cells, s->boundary_cells, s->method, s->boundary_stream, s->spline);
-       cudaDeviceSynchronize();
+       eamForce3GpuAsync(s->gpu, s->gpu.b_list, s->n_boundary_cells, s->boundary_cells, s->method, s->spline);
+       // SYCL: wait for all operations
+       g_sycl_queue->wait();
      }
      else {
        eamForce3Gpu(s->gpu,s->method, s->spline);

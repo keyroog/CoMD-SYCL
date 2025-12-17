@@ -27,13 +27,13 @@ enum TimerHandle{totalTimer, loopTimer, timestepTimer,
 ///
 #ifndef NTIMING
 #define startTimer(handle)    \
-   /*cudaDeviceSynchronize();*/   \
+   /* g_sycl_queue->wait(); */   \
    do                         \
 {                          \
    profileStart(handle);   \
 } while(0)
 #define stopTimer(handle)     \
-   /*cudaDeviceSynchronize();*/   \
+   /* g_sycl_queue->wait(); */   \
    do                         \
 {                          \
    profileStop(handle);    \

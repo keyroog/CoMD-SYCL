@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+ * SYCL port: 2024
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,18 +30,25 @@
 /// \file
 /// Functions to maintain neighbor list of each atom. 
 
-#include "defines.h"
-#include "CoMDTypes.h"
+#include <sycl/sycl.hpp>
+
+extern "C" {
 #include "gpu_neighborList.h"
 #include "linkCells.h"
 #include "initAtoms.h"
 #include "memUtils.h"
+}
+
+#include "defines.h"
+#include "CoMDTypes.h"
 #include "parallel.h"
 #include "gpu_types.h"
+#include "gpu_kernels.h"
 
 #include <assert.h>
-#include <cuda_runtime.h>
-#include "gpu_kernels.h"
+
+// Access to the global SYCL queue
+extern sycl::queue* g_sycl_queue;
 
 /// Initialize Neighborlist. Allocates all required data structures and initializes all
 /// variables. Requires atoms to be initialized and nLocal needs to be set.
@@ -59,12 +67,13 @@ void initNeighborListGpu(SimGpu * sim, NeighborListGpu* neighborList, const int 
    neighborList->updateLinkCellsRequired = 0;
    neighborList->forceRebuildFlag = 1; 
 
-   cudaMalloc((void**)&(neighborList->list), neighborList->nMaxLocal * neighborList->nMaxNeighbors * sizeof(int));
-   cudaMalloc((void**)&(neighborList->nNeighbors), neighborList->nMaxLocal * sizeof(int));
+   // SYCL device memory allocation
+   neighborList->list = sycl::malloc_device<int>(neighborList->nMaxLocal * neighborList->nMaxNeighbors, *g_sycl_queue);
+   neighborList->nNeighbors = sycl::malloc_device<int>(neighborList->nMaxLocal, *g_sycl_queue);
 
-   cudaMalloc((void**)&(neighborList->lastR.x), neighborList->nMaxLocal * sizeof(real_t));
-   cudaMalloc((void**)&(neighborList->lastR.y), neighborList->nMaxLocal * sizeof(real_t));
-   cudaMalloc((void**)&(neighborList->lastR.z), neighborList->nMaxLocal * sizeof(real_t));  
+   neighborList->lastR.x = sycl::malloc_device<real_t>(neighborList->nMaxLocal, *g_sycl_queue);
+   neighborList->lastR.y = sycl::malloc_device<real_t>(neighborList->nMaxLocal, *g_sycl_queue);
+   neighborList->lastR.z = sycl::malloc_device<real_t>(neighborList->nMaxLocal, *g_sycl_queue);
 
    emptyNeighborListGpu(sim, BOTH);
 
@@ -78,9 +87,10 @@ void destroyNeighborListGpu(NeighborListGpu** neighborList)
 
    comdFree((*neighborList)->list);
    comdFree((*neighborList)->nNeighbors);
-   cudaFree((*neighborList)->lastR.x);
-   cudaFree((*neighborList)->lastR.y);
-   cudaFree((*neighborList)->lastR.z);
+   // SYCL device memory deallocation
+   sycl::free((*neighborList)->lastR.x, *g_sycl_queue);
+   sycl::free((*neighborList)->lastR.y, *g_sycl_queue);
+   sycl::free((*neighborList)->lastR.z, *g_sycl_queue);
    comdFree((*neighborList));
    *neighborList = NULL;
 

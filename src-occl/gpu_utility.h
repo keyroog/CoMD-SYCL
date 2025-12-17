@@ -1,5 +1,6 @@
 /*************************************************************************
  * Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+ * SYCL port (c) 2024
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,9 +33,14 @@
 #include "CoMDTypes.h"
 #include "gpu_types.h"
 #include <memory.h>
-
-#include <cuda_runtime.h>
 #include <stdlib.h>
+
+// Only include SYCL headers in C++ code
+#ifdef __cplusplus
+#include <sycl/sycl.hpp>
+// Global SYCL queue declaration (only visible in C++)
+extern sycl::queue* g_sycl_queue;
+#endif
 
 #if defined(_WIN32) || defined(_WIN64) 
 #include <winsock2.h>
@@ -48,6 +54,10 @@
 
 #ifdef DO_MPI
 #include <mpi.h>
+#endif
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 struct LinkCellsGpuSt;
@@ -64,57 +74,56 @@ void updateGpuHalo(SimFlat *sim);
 void updateNAtomsCpu(SimFlat* sim);
 void updateNAtomsGpu(SimFlat* sim);
 void emptyHaloCellsGpu(SimFlat* sim);
-void cudaCopyDtH(void* dst, const void* src, int size);
+void syclCopyDtH(void* dst, const void* src, int size);
+void initSplineCoefficients(real_t* gpu_coefficients, int n, real_t* values, real_t x0, real_t invDx);
 
 int compactHaloCells(SimFlat* sim, char* h_compactAtoms, int* h_cellOffset);
 
-#define CUDA_CHECK(command)											\
-{														\
-  cudaDeviceSynchronize(); \
-  cudaError_t status = (command);                                                                      		\
-  if (status != cudaSuccess) {                                                                                  \
-    fprintf(stderr, "Error in file %s at line %d\n", __FILE__, __LINE__);                                  	\
-    fprintf(stderr, "CUDA error %d: %s", status, cudaGetErrorString(status));                              	\
-    fprintf(stderr, "\n");                                                                                 	\
-    exit(-1);                                                                                              	\
-  }                                                                                                             \
+#ifdef __cplusplus
+}  // end extern "C"
+
+// SYCL error checking macro - only available in C++
+#define SYCL_CHECK(command)                                                     \
+{                                                                               \
+  try {                                                                         \
+    command;                                                                    \
+  } catch (sycl::exception const& e) {                                          \
+    fprintf(stderr, "Error in file %s at line %d\n", __FILE__, __LINE__);       \
+    fprintf(stderr, "SYCL error: %s\n", e.what());                              \
+    exit(-1);                                                                   \
+  }                                                                             \
 }
 
 #ifdef DEBUG
 #ifdef DO_MPI
-#define CUDA_GET_LAST_ERROR \
-{														\
-  cudaDeviceSynchronize(); \
-  int rank; \
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank); \
-  cudaError_t status = (cudaGetLastError());                                                                      		\
-  if (status != cudaSuccess) {                                                                                  \
-    fprintf(stderr, "rank %d: Error in file %s at line %d\n", rank, __FILE__, __LINE__);                                  	\
-    fprintf(stderr, "CUDA error %d: %s", status, cudaGetErrorString(status));                              	\
-    fprintf(stderr, "\n");                                                                                 	\
-    exit(-1);                                                                                              	\
-  } \
+#define SYCL_GET_LAST_ERROR                                                     \
+{                                                                               \
+  try {                                                                         \
+    g_sycl_queue->wait_and_throw();                                             \
+  } catch (sycl::exception const& e) {                                          \
+    int rank;                                                                   \
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);                                       \
+    fprintf(stderr, "rank %d: Error in file %s at line %d\n", rank, __FILE__, __LINE__); \
+    fprintf(stderr, "SYCL error: %s\n", e.what());                              \
+    exit(-1);                                                                   \
+  }                                                                             \
 }
 #else
-#define CUDA_GET_LAST_ERROR \
-{														\
-  cudaDeviceSynchronize(); \
-  cudaError_t status = (cudaGetLastError());                                                                      		\
-  if (status != cudaSuccess) {                                                                                  \
-    fprintf(stderr, "Error in file %s at line %d\n", __FILE__, __LINE__);                                  	\
-    fprintf(stderr, "CUDA error %d: %s", status, cudaGetErrorString(status));                              	\
-    fprintf(stderr, "\n");                                                                                 	\
-    exit(-1);                                                                                              	\
-  }                                                                                                             \
+#define SYCL_GET_LAST_ERROR                                                     \
+{                                                                               \
+  try {                                                                         \
+    g_sycl_queue->wait_and_throw();                                             \
+  } catch (sycl::exception const& e) {                                          \
+    fprintf(stderr, "Error in file %s at line %d\n", __FILE__, __LINE__);       \
+    fprintf(stderr, "SYCL error: %s\n", e.what());                              \
+    exit(-1);                                                                   \
+  }                                                                             \
 }
 #endif
-
 #else
-#define CUDA_GET_LAST_ERROR 
+#define SYCL_GET_LAST_ERROR 
 #endif
 
+#endif  // __cplusplus
 
-
-
-
-#endif
+#endif  // __GPU_UTILITY_H_

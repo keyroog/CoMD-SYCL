@@ -5,7 +5,7 @@
 #define __HALO_EXCHANGE_
 
 #include "mytype.h"
-#include <cuda_runtime.h>
+// SYCL version: no CUDA runtime needed, managed through gpu_utility.h
 
 struct AtomsSt;
 struct LinkCellSt;
@@ -134,7 +134,8 @@ void sortAtomsInCell(struct AtomsSt* atoms, struct LinkCellSt* boxes, int iBox);
 /// Package data for the force exchange.
 typedef struct ForceMsgSt
 {
-   real_t dfEmbed;
+   int gid;           //!< Global atom id
+   real_t dfEmbed;    //!< Derivative of embedding function
 }
 ForceMsg;
 

@@ -1,5 +1,5 @@
 /// \file
-/// CoMD data structures.
+/// CoMD data structures for SYCL version.
 
 #ifndef __COMDTYPES_H_
 #define __COMDTYPES_H_
@@ -18,12 +18,9 @@
   #define vsnprintf _vsnprintf 
   #define strcasecmp _stricmp 
   #define strncasecmp _strnicmp 
-  // use c++ for VS 2010
-  #define EXTERN_C extern "C"
-#else
-  // use c99 for linux
-  #define EXTERN_C extern
 #endif
+
+#define EXTERN_C extern "C"
 
 struct SimFlatSt;
 
@@ -112,9 +109,8 @@ typedef struct SimFlatSt
    int *boundary1_cells_d;	//<! boundary cells that are neighbors to halos (outer ring of the local Cells)
    int *boundary1_cells_h;	//<! boundary cells that are neighbors to halos (outer ring of the local Cells)
 
-   // streams for async execution
-   cudaStream_t boundary_stream;	
-   cudaStream_t interior_stream;
+   // SYCL doesn't use streams like CUDA, operations are managed through queues
+   // Async execution handled by SYCL queue
 
    // gpu options
    int gpuAsync;

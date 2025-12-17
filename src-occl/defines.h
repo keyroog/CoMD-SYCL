@@ -1,3 +1,31 @@
+/*************************************************************************
+ * Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+ * SYCL port (c) 2024
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ ************************************************************************/
 
 #ifndef __DEFINES_H_
 #define __DEFINES_H_
@@ -25,13 +53,22 @@
 //Moved to the Makefile
 //#define MAXATOMS 256 
 
+// SYCL sub-group size (equivalent to CUDA warp size)
+// Intel GPUs typically use 16 or 32, we use 32 for compatibility
 #define WARP_SIZE		32
+#define SUB_GROUP_SIZE  32
 
 #define THREAD_ATOM_CTA         128
 #define WARP_ATOM_CTA		128
 #define CTA_CELL_CTA		128
 
-// NOTE: the following is tuned for GK110
+// Work-group sizes for SYCL
+#define WORK_GROUP_SIZE     128
+#define THREAD_ATOM_WG      128
+#define WARP_ATOM_WG        128
+#define CTA_CELL_WG         128
+
+// NOTE: the following is tuned for Intel GPUs
 #ifdef COMD_DOUBLE
 #define THREAD_ATOM_ACTIVE_CTAS 	10	// 62%
 #define WARP_ATOM_ACTIVE_CTAS 		12	// 75%
