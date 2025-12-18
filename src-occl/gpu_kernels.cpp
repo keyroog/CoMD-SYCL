@@ -1150,9 +1150,9 @@ int compactCellsGpu(char* work_d, int nCells, int *d_cellList, SimGpu sim_gpu, i
             int iOff = iBox * MAXATOMS + iAtom;
             int bufIdx = d_cellOffsets[iCell] + iAtom;
             
-            atomMsg.rx[bufIdx] = sim_gpu.atoms.r.x[iOff] - shift.x;
-            atomMsg.ry[bufIdx] = sim_gpu.atoms.r.y[iOff] - shift.y;
-            atomMsg.rz[bufIdx] = sim_gpu.atoms.r.z[iOff] - shift.z;
+            atomMsg.rx[bufIdx] = sim_gpu.atoms.r.x[iOff] - shift[0];
+            atomMsg.ry[bufIdx] = sim_gpu.atoms.r.y[iOff] - shift[1];
+            atomMsg.rz[bufIdx] = sim_gpu.atoms.r.z[iOff] - shift[2];
             atomMsg.px[bufIdx] = sim_gpu.atoms.p.x[iOff];
             atomMsg.py[bufIdx] = sim_gpu.atoms.p.y[iOff];
             atomMsg.pz[bufIdx] = sim_gpu.atoms.p.z[iOff];
