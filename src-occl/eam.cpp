@@ -280,10 +280,10 @@ int eamForceCpuNL(SimFlat* s)
    if (pot->forceExchange == NULL)
    {
       int maxTotalAtoms = MAXATOMS*s->boxes->nTotalBoxes;
-      pot->dfEmbed = comdMalloc(maxTotalAtoms*sizeof(real_t));
-      pot->rhobar  = comdMalloc(maxTotalAtoms*sizeof(real_t));
+      pot->dfEmbed = (real_t*)comdMalloc(maxTotalAtoms*sizeof(real_t));
+      pot->rhobar  = (real_t*)comdMalloc(maxTotalAtoms*sizeof(real_t));
       pot->forceExchange = initForceHaloExchange(s->domain, s->boxes,s->method<CPU_NL);
-      pot->forceExchangeData = comdMalloc(sizeof(ForceExchangeData));
+      pot->forceExchangeData = (ForceExchangeData*)comdMalloc(sizeof(ForceExchangeData));
       pot->forceExchangeData->dfEmbed = pot->dfEmbed;
       pot->forceExchangeData->boxes = s->boxes;
    }
@@ -432,10 +432,10 @@ void eamPrint(FILE* file, BasePotential* pot)
    fprintf(file, "  Potential type  : EAM\n");
    fprintf(file, "  Species name    : %s\n", eamPot->name);
    fprintf(file, "  Atomic number   : %d\n", eamPot->atomicNo);
-   fprintf(file, "  Mass            : "FMT1" amu\n", eamPot->mass/amuToInternalMass); // print in amu
+   fprintf(file, "  Mass            : " FMT1 " amu\n", eamPot->mass/amuToInternalMass); // print in amu
    fprintf(file, "  Lattice type    : %s\n", eamPot->latticeType);
-   fprintf(file, "  Lattice spacing : "FMT1" Angstroms\n", eamPot->lat);
-   fprintf(file, "  Cutoff          : "FMT1" Angstroms\n", eamPot->cutoff);
+   fprintf(file, "  Lattice spacing : " FMT1 " Angstroms\n", eamPot->lat);
+   fprintf(file, "  Cutoff          : " FMT1 " Angstroms\n", eamPot->cutoff);
 }
 
 void eamDestroy(BasePotential** pPot)
