@@ -6,6 +6,10 @@
 
 #include "mytype.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct SimFlatSt;
 struct LinkCellSt;
 struct NeighborListSt;
@@ -42,4 +46,9 @@ void randomDisplacements(struct SimFlatSt* s, real_t delta);
 
 /// Update the local id of each local particle. This is used by the neighbor-list
 void atomsUpdateLocalId(struct LinkCellSt* boxes, Atoms* atoms);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

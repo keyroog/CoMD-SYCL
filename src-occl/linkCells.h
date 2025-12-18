@@ -6,6 +6,10 @@
 
 #include "mytype.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct DomainSt;
 struct AtomsSt;
 struct SimFlatSt;
@@ -57,4 +61,9 @@ void emptyHaloCells(LinkCell* boxes);
 
 /// updates the particles within the boundary cells. Requires that the particles are already present in the hashtable
 void updateGpuBoundaryCells(struct SimFlatSt* sim);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

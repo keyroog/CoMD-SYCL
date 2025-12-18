@@ -7,6 +7,10 @@
 #include "mytype.h"
 // SYCL version: no CUDA runtime needed, managed through gpu_utility.h
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct AtomsSt;
 struct LinkCellSt;
 struct DomainSt;
@@ -153,5 +157,9 @@ typedef struct ForceExchangeParmsSt
    int* partial_sums[6];  // partial sums for scan
 }
 ForceExchangeParms;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
