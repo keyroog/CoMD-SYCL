@@ -32,18 +32,19 @@
 
 #include <sycl/sycl.hpp>
 
-extern "C" {
 #include "gpu_neighborList.h"
+#include "CoMDTypes.h"
+#include "gpu_types.h"
+#include "gpu_kernels.h"
+
+extern "C" {
 #include "linkCells.h"
 #include "initAtoms.h"
 #include "memUtils.h"
 }
 
 #include "defines.h"
-#include "CoMDTypes.h"
 #include "parallel.h"
-#include "gpu_types.h"
-#include "gpu_kernels.h"
 
 #include <assert.h>
 

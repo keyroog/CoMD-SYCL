@@ -3,9 +3,10 @@
 
 #include <sycl/sycl.hpp>
 
+#include "linkCells.h"
+
 extern "C" {
 #include "timestep.h"
-#include "linkCells.h"
 #include "neighborList.h"
 #include "hashTable.h"
 #include "performanceTimers.h"

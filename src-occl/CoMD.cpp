@@ -25,10 +25,11 @@
 
 #include <sycl/sycl.hpp>
 
-extern "C" {
 #include "CoMDTypes.h"
-#include "decomposition.h"
 #include "linkCells.h"
+
+extern "C" {
+#include "decomposition.h"
 #include "neighborList.h"
 #include "eam.h"
 #include "ljForce.h"

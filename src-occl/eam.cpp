@@ -86,11 +86,12 @@
 
 #include <sycl/sycl.hpp>
 
+#include "linkCells.h"
+
 extern "C" {
 #include "eam.h"
 #include "constants.h"
 #include "memUtils.h"
-#include "linkCells.h"
 #include "neighborList.h"
 #include "performanceTimers.h"
 #include "haloExchange.h"

@@ -30,10 +30,11 @@
 
 #include <sycl/sycl.hpp>
 
+#include "linkCells.h"
+
 extern "C" {
 #include "haloExchange.h"
 #include "decomposition.h"
-#include "linkCells.h"
 #include "hashTable.h"
 #include "neighborList.h"
 #include "eam.h"

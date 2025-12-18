@@ -3,8 +3,9 @@
 
 #include <sycl/sycl.hpp>
 
-extern "C" {
 #include "linkCells.h"
+
+extern "C" {
 #include "memUtils.h"
 #include "decomposition.h"
 #include "hashTable.h"
