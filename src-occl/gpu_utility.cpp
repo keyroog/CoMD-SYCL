@@ -467,13 +467,13 @@ int compactHaloCells(SimFlat* sim, char* h_compactAtoms, int* h_cellOffset)
         int iOff = (sim->boxes->nLocalBoxes + ii) * MAXATOMS;
         for(int i = h_cellOffset[ii]; i < h_cellOffset[ii+1]; ++i, ++iOff)
         {
-            msg_h.rx[i] = sim->atoms->r[iOff];
-            msg_h.ry[i] = sim->atoms->r[sim->boxes->nTotalBoxes*MAXATOMS + iOff];
-            msg_h.rz[i] = sim->atoms->r[2*sim->boxes->nTotalBoxes*MAXATOMS + iOff];
+            msg_h.rx[i] = sim->atoms->r.x[iOff];
+            msg_h.ry[i] = sim->atoms->r.y[iOff];
+            msg_h.rz[i] = sim->atoms->r.z[iOff];
 
-            msg_h.px[i] = sim->atoms->p[iOff];
-            msg_h.py[i] = sim->atoms->p[sim->boxes->nTotalBoxes*MAXATOMS + iOff];
-            msg_h.pz[i] = sim->atoms->p[2*sim->boxes->nTotalBoxes*MAXATOMS + iOff];
+            msg_h.px[i] = sim->atoms->p.x[iOff];
+            msg_h.py[i] = sim->atoms->p.y[iOff];
+            msg_h.pz[i] = sim->atoms->p.z[iOff];
 
             msg_h.type[i] = sim->atoms->iSpecies[iOff];
             msg_h.gid[i] = sim->atoms->gid[iOff];
@@ -605,21 +605,21 @@ void CopyDataToGpu(SimFlat *flat, int do_eam)
     }
     
     // Copy positions
-    g_sycl_queue->memcpy(gpu->atoms.r.x, atoms->r, total_atoms * sizeof(real_t));
-    g_sycl_queue->memcpy(gpu->atoms.r.y, atoms->r + total_atoms, total_atoms * sizeof(real_t));
-    g_sycl_queue->memcpy(gpu->atoms.r.z, atoms->r + 2*total_atoms, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(gpu->atoms.r.x, atoms->r.x, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(gpu->atoms.r.y, atoms->r.y, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(gpu->atoms.r.z, atoms->r.z, total_atoms * sizeof(real_t));
     
     // Copy momenta
-    g_sycl_queue->memcpy(gpu->atoms.p.x, atoms->p, total_atoms * sizeof(real_t));
-    g_sycl_queue->memcpy(gpu->atoms.p.y, atoms->p + total_atoms, total_atoms * sizeof(real_t));
-    g_sycl_queue->memcpy(gpu->atoms.p.z, atoms->p + 2*total_atoms, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(gpu->atoms.p.x, atoms->p.x, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(gpu->atoms.p.y, atoms->p.y, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(gpu->atoms.p.z, atoms->p.z, total_atoms * sizeof(real_t));
     
     // Copy species and gid
     g_sycl_queue->memcpy(gpu->atoms.iSpecies, atoms->iSpecies, total_atoms * sizeof(int));
     g_sycl_queue->memcpy(gpu->atoms.gid, atoms->gid, total_atoms * sizeof(int));
     
     // Copy species mass
-    g_sycl_queue->memcpy(gpu->species_mass, flat->species->mass, sizeof(real_t));
+    g_sycl_queue->memcpy(gpu->species_mass, &flat->species->mass, sizeof(real_t));
     
     // Copy nAtoms
     g_sycl_queue->memcpy(gpu->boxes.nAtoms, boxes->nAtoms, boxes->nTotalBoxes * sizeof(int));
@@ -636,14 +636,14 @@ void GetDataFromGpu(SimFlat *flat)
     int total_atoms = boxes->nTotalBoxes * MAXATOMS;
     
     // Copy back positions
-    g_sycl_queue->memcpy(atoms->r, gpu->atoms.r.x, total_atoms * sizeof(real_t));
-    g_sycl_queue->memcpy(atoms->r + total_atoms, gpu->atoms.r.y, total_atoms * sizeof(real_t));
-    g_sycl_queue->memcpy(atoms->r + 2*total_atoms, gpu->atoms.r.z, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(atoms->r.x, gpu->atoms.r.x, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(atoms->r.y, gpu->atoms.r.y, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(atoms->r.z, gpu->atoms.r.z, total_atoms * sizeof(real_t));
     
     // Copy back momenta
-    g_sycl_queue->memcpy(atoms->p, gpu->atoms.p.x, total_atoms * sizeof(real_t));
-    g_sycl_queue->memcpy(atoms->p + total_atoms, gpu->atoms.p.y, total_atoms * sizeof(real_t));
-    g_sycl_queue->memcpy(atoms->p + 2*total_atoms, gpu->atoms.p.z, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(atoms->p.x, gpu->atoms.p.x, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(atoms->p.y, gpu->atoms.p.y, total_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(atoms->p.z, gpu->atoms.p.z, total_atoms * sizeof(real_t));
     
     g_sycl_queue->wait();
 }
@@ -657,9 +657,9 @@ void GetLocalAtomsFromGpu(SimFlat *flat)
     int local_atoms = boxes->nLocalBoxes * MAXATOMS;
     
     // Copy back local positions only
-    g_sycl_queue->memcpy(atoms->r, gpu->atoms.r.x, local_atoms * sizeof(real_t));
-    g_sycl_queue->memcpy(atoms->r + boxes->nTotalBoxes * MAXATOMS, gpu->atoms.r.y, local_atoms * sizeof(real_t));
-    g_sycl_queue->memcpy(atoms->r + 2*boxes->nTotalBoxes * MAXATOMS, gpu->atoms.r.z, local_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(atoms->r.x, gpu->atoms.r.x, local_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(atoms->r.y, gpu->atoms.r.y, local_atoms * sizeof(real_t));
+    g_sycl_queue->memcpy(atoms->r.z, gpu->atoms.r.z, local_atoms * sizeof(real_t));
     
     g_sycl_queue->wait();
 }
@@ -694,9 +694,9 @@ void updateGpuHalo(SimFlat *sim)
     int offset = nLocalBoxes * MAXATOMS;
     int size = nHaloBoxes * MAXATOMS;
     
-    g_sycl_queue->memcpy(sim->gpu.atoms.r.x + offset, sim->atoms->r + offset, size * sizeof(real_t));
-    g_sycl_queue->memcpy(sim->gpu.atoms.r.y + offset, sim->atoms->r + nTotalBoxes*MAXATOMS + offset, size * sizeof(real_t));
-    g_sycl_queue->memcpy(sim->gpu.atoms.r.z + offset, sim->atoms->r + 2*nTotalBoxes*MAXATOMS + offset, size * sizeof(real_t));
+    g_sycl_queue->memcpy(sim->gpu.atoms.r.x + offset, sim->atoms->r.x + offset, size * sizeof(real_t));
+    g_sycl_queue->memcpy(sim->gpu.atoms.r.y + offset, sim->atoms->r.y + offset, size * sizeof(real_t));
+    g_sycl_queue->memcpy(sim->gpu.atoms.r.z + offset, sim->atoms->r.z + offset, size * sizeof(real_t));
     
     // Update nAtoms for halo cells
     g_sycl_queue->memcpy(sim->gpu.boxes.nAtoms + nLocalBoxes, sim->boxes->nAtoms + nLocalBoxes, nHaloBoxes * sizeof(int));
