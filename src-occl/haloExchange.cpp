@@ -255,7 +255,6 @@ HaloExchange* initForceHaloExchange(Domain* domain, LinkCell* boxes, int useGPU)
       parms->partial_sums[ii] = sycl::malloc_device<int>(size/256 + 1, *g_sycl_queue);
    }
    g_sycl_queue->wait();
-   }
    
    hh->hashTable = NULL;
    hh->type = 1;
