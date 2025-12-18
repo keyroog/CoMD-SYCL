@@ -27,7 +27,7 @@ SYCL_FLAGS = -fsycl -fsycl-targets=spir64
 # For Intel GPUs specifically:
 # SYCL_FLAGS = -fsycl -fsycl-targets=spir64_gen -Xs "-device pvc"
 
-CXXFLAGS = -std=c++17 -DMAXATOMS=$(MAXATOMS) $(SYCL_FLAGS)
+CXXFLAGS = -std=c++17 -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -DMAXATOMS=$(MAXATOMS) $(SYCL_FLAGS)
 CFLAGS = -std=c99 -Wno-unused-result -DMAXATOMS=$(MAXATOMS)
 
 OPTFLAGS = -g -O3
