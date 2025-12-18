@@ -33,6 +33,7 @@
 #define _GPU_NEIGHBOR_LIST_H_
 
 #include "mytype.h"
+#include "gpu_types.h"
 
 struct NeighborListGpuSt;
 struct LinkCellSt;
@@ -40,10 +41,10 @@ struct SimFlatSt;
 struct AtomsSt;
 
 /// Initialized the NeighborList data stucture
-void initNeighborListGpu(struct SimGpuSt * sim, struct NeighborListGpuSt* neighborList, const int nLocalBoxes, const real_t skinDistance);
+void initNeighborListGpu(SimGpu* sim, NeighborListGpu* neighborList, const int nLocalBoxes, const real_t skinDistance);
 
 /// frees all data associated with *neighborList
-void destroyNeighborListGpu(struct NeighborListGpuSt** neighborList);
+void destroyNeighborListGpu(NeighborListGpu** neighborList);
 
 ///// Sets all neighbor counts to zero
 //void emptyNeighborListGpu(NeighborListGpu* neighborList);
@@ -52,5 +53,5 @@ void destroyNeighborListGpu(struct NeighborListGpuSt** neighborList);
 //int neighborListUpdateRequiredGpu(struct SimGpuSt* sim);
 
 /// Forces a rebuild of the neighborlist (but does not rebuild the neighborlist yet, this requires a separate call).
-void neighborListForceRebuildGpu(struct NeighborListGpuSt* neighborList);
+void neighborListForceRebuildGpu(NeighborListGpu* neighborList);
 #endif

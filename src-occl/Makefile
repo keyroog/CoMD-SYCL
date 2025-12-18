@@ -36,7 +36,7 @@ C_LIB = -lm
 
 ### If you need to specify include paths, library paths, or link flags
 ### for MPI, put them here.  Put both -L and -l switches into MPI_LIB.
-MPI_LIB =
+MPI_LIB = -lmpi
 MPI_INCLUDE = 
 
 ### oneCCL paths

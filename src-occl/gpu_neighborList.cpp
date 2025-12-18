@@ -97,7 +97,7 @@ void destroyNeighborListGpu(NeighborListGpu** neighborList)
    return;
 }
 
-void neighborListForceRebuildGpu(struct NeighborListGpuSt* neighborList)
+void neighborListForceRebuildGpu(NeighborListGpu* neighborList)
 {
    neighborList->forceRebuildFlag = 1; 
 }
