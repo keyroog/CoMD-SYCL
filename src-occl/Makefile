@@ -1,44 +1,26 @@
-# Makefile for SYCL version with oneCCL support (portable Linux/Windows)
+# Makefile for SYCL version with oneCCL support
 
-# -----------------------------
-# OS-specific defaults & helpers
-# -----------------------------
-ifeq ($(OS),Windows_NT)
-  # Do NOT force /bin/bash on Windows; use cmd.exe for recipes
-  SHELL := cmd.exe
-  .SHELLFLAGS := /c
+SHELL = /bin/bash
 
-  # oneAPI default root (Windows)
-  ONEAPI_ROOT ?= C:/Program Files (x86)/Intel/oneAPI
+### Specify Intel oneAPI paths if necessary
+ONEAPI_ROOT ?= /opt/intel/oneapi
 
-  # Windows command helpers
-  NULLDEV := NUL
-  RM_F    := del /F /Q
-  RMDIR_F := rmdir /S /Q
-  MKDIR_P := if not exist "$(1)" mkdir "$(1)"
-else
-  # Linux/macOS
-  SHELL = /bin/bash
+### CoMD can be built in either double or single precision and with or
+### without MPI.  Select desired precision and MPI here.
 
-  ONEAPI_ROOT ?= /opt/intel/oneapi
-
-  NULLDEV := /dev/null
-  RM_F    := rm -f
-  RMDIR_F := rm -rf
-  MKDIR_P := mkdir -p
-endif
-
-# -----------------------------
-# Build configuration (same knobs as original)
-# -----------------------------
+# double precision (ON/OFF)
 DOUBLE_PRECISION = ON
+# MPI for parallel (ON/OFF)
 DO_MPI = ON
+# oneCCL for collective operations (ON/OFF)
 USE_ONECCL = ON
+# Maximum number of atoms that can be stored in a link cell
 MAXATOMS = 256
 
-# Compilers (keep as in original; override from env if needed)
+### Set your desired C++ compiler and any necessary flags.
+### For SYCL we use icpx (Intel oneAPI DPC++ compiler)
 CXX = icpx
-CC  = mpicc
+CC = mpicc
 
 # SYCL flags
 SYCL_FLAGS = -fsycl -fsycl-targets=spir64
@@ -46,76 +28,75 @@ SYCL_FLAGS = -fsycl -fsycl-targets=spir64
 # SYCL_FLAGS = -fsycl -fsycl-targets=spir64_gen -Xs "-device pvc"
 
 CXXFLAGS = -std=c++17 -DMAXATOMS=$(MAXATOMS) $(SYCL_FLAGS)
-CFLAGS   = -std=c99 -Wno-unused-result -DMAXATOMS=$(MAXATOMS)
+CFLAGS = -std=c99 -Wno-unused-result -DMAXATOMS=$(MAXATOMS)
 
 OPTFLAGS = -g -O3
-INCLUDES =
+INCLUDES = 
+C_LIB = -lm
 
-# libm only on Unix
-ifeq ($(OS),Windows_NT)
-  C_LIB =
-else
-  C_LIB = -lm
-endif
-
+### If you need to specify include paths, library paths, or link flags
+### for MPI, put them here.  Put both -L and -l switches into MPI_LIB.
 MPI_LIB =
-MPI_INCLUDE =
+MPI_INCLUDE = 
 
-# oneCCL paths
+### oneCCL paths
 CCL_ROOT ?= $(ONEAPI_ROOT)/ccl/latest
 CCL_INCLUDE = -I$(CCL_ROOT)/include
+CCL_LIB = -L$(CCL_ROOT)/lib -lccl
 
-# Library dir differs sometimes; keep lib by default and allow override
-CCL_LIBDIR ?= $(CCL_ROOT)/lib
-CCL_LIB = -L$(CCL_LIBDIR) -lccl
+### A place to specify any other include or library switches your
+### platform requires.
+OTHER_LIB = 
+OTHER_INCLUDE = 
 
-OTHER_LIB =
-OTHER_INCLUDE =
+#########################################
+### Below here, it is pitch black.  
+### You are likely to be eaten by a grue.
+##########################################
 
-# -----------------------------
-# Internals
-# -----------------------------
+# clear all suffixes
 .SUFFIXES:
+# list only those that we use 
 .SUFFIXES: .c .cpp .o
 
 .PHONY: DEFAULT clean distclean depend
 
 BIN_DIR=../bin
 
-# Precision
+# Check for double precision
 ifeq ($(DOUBLE_PRECISION), ON)
-  CFLAGS   += -DCOMD_DOUBLE
-  CXXFLAGS += -DCOMD_DOUBLE
+CFLAGS += -DCOMD_DOUBLE
+CXXFLAGS += -DCOMD_DOUBLE
 else
-  CFLAGS   += -DCOMD_SINGLE
-  CXXFLAGS += -DCOMD_SINGLE
+CFLAGS += -DCOMD_SINGLE
+CXXFLAGS += -DCOMD_SINGLE
 endif
 
-# Variant & MPI
+# Set executable name and add includes & libraries for MPI if needed.
 CoMD_VARIANT = CoMD-sycl
 ifeq ($(DO_MPI), ON)
-  CoMD_VARIANT = CoMD-sycl-mpi
-  INCLUDES += $(MPI_INCLUDE)
-  CFLAGS   += -DDO_MPI
-  CXXFLAGS += -DDO_MPI
-  LDFLAGS  += $(MPI_LIB)
+CoMD_VARIANT = CoMD-sycl-mpi
+INCLUDES += ${MPI_INCLUDE}
+CFLAGS += -DDO_MPI
+CXXFLAGS += -DDO_MPI
+LDFLAGS += ${MPI_LIB}
 endif
 
-# oneCCL (same behavior: when ON -> mpi-ccl name)
+# Add oneCCL support
 ifeq ($(USE_ONECCL), ON)
-  INCLUDES += $(CCL_INCLUDE)
-  CXXFLAGS += -DUSE_ONECCL
-  LDFLAGS  += $(CCL_LIB)
-  CoMD_VARIANT = CoMD-sycl-mpi-ccl
+INCLUDES += ${CCL_INCLUDE}
+CXXFLAGS += -DUSE_ONECCL
+LDFLAGS += ${CCL_LIB}
+CoMD_VARIANT = CoMD-sycl-mpi-ccl
 endif
 
-CoMD_EXE = $(BIN_DIR)/$(CoMD_VARIANT)
+CoMD_EXE = ${BIN_DIR}/${CoMD_VARIANT}
 
-LDFLAGS  += $(C_LIB) $(OTHER_LIB)
-CFLAGS   += $(OPTFLAGS) $(INCLUDES) $(OTHER_INCLUDE)
-CXXFLAGS += $(OPTFLAGS) $(INCLUDES) $(OTHER_INCLUDE)
+LDFLAGS += ${C_LIB} ${OTHER_LIB}
+CFLAGS  += ${OPTFLAGS} ${INCLUDES} ${OTHER_INCLUDE}
+CXXFLAGS += ${OPTFLAGS} ${INCLUDES} ${OTHER_INCLUDE}
 
-# Sources
+# C files to be compiled with mpicc/gcc
 C_SOURCES = cmdLineParser.c \
             decomposition.c \
             hashTable.c \
@@ -130,6 +111,7 @@ C_SOURCES = cmdLineParser.c \
 
 C_OBJECTS = $(C_SOURCES:.c=.o)
 
+# C++ files to be compiled with icpx (SYCL)
 CXX_SOURCES = CoMD.cpp \
               parallel.cpp \
               gpu_utility.cpp \
@@ -144,58 +126,33 @@ CXX_OBJECTS = $(CXX_SOURCES:.cpp=.o)
 
 OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS)
 
-DEFAULT: $(CoMD_EXE)
+DEFAULT: ${CoMD_EXE}
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	${CC} ${CFLAGS} -c $< -o $@
 
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	${CXX} ${CXXFLAGS} -c $< -o $@
 
-$(CoMD_EXE): $(BIN_DIR) CoMD_info.h $(OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $(CoMD_EXE) $(OBJECTS) $(LDFLAGS)
+${CoMD_EXE}: ${BIN_DIR} CoMD_info.h ${OBJECTS}
+	${CXX} ${CXXFLAGS} -o ${CoMD_EXE} ${OBJECTS} ${LDFLAGS}
 
-# Header generation: same generator as Makefile
 CoMD_info.h: Makefile
-ifeq ($(OS),Windows_NT)
-	REM If generate_info_header is a bash script, you must run this Makefile under a bash-capable environment.
-	.\generate_info_header $(CoMD_VARIANT) "$(CXX)" "$(CXXFLAGS)" "$(LDFLAGS)"
-else
-	./generate_info_header $(CoMD_VARIANT) "$(CXX)" "$(CXXFLAGS)" "$(LDFLAGS)"
-endif
+	./generate_info_header ${CoMD_VARIANT} "$(CXX)" "$(CXXFLAGS)" "$(LDFLAGS)"
 
-$(BIN_DIR):
-ifeq ($(OS),Windows_NT)
-	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
-else
-	@mkdir -p "$(BIN_DIR)"
-endif
+${BIN_DIR}:
+	@if [ ! -d ${BIN_DIR} ]; then mkdir -p ${BIN_DIR} ; fi
 
 clean:
-ifeq ($(OS),Windows_NT)
-	-@$(RM_F) *.o CoMD_info.h .depend 2>$(NULLDEV)
-else
-	-@$(RM_F) *.o CoMD_info.h .depend
-endif
+	rm -f *.o CoMD_info.h .depend
 
 distclean: clean
-ifeq ($(OS),Windows_NT)
-	-@$(RM_F) "$(CoMD_EXE)" .depend.bak 2>$(NULLDEV)
-	-@if exist html $(RMDIR_F) html
-	-@if exist latex $(RMDIR_F) latex
-else
-	-@$(RM_F) $(CoMD_EXE) .depend.bak
-	-@$(RMDIR_F) html latex
-endif
+	rm -f ${CoMD_EXE} .depend.bak
+	rm -rf html latex
 
-# Optional dependency generation (often not available on Windows)
 depend:
-ifeq ($(OS),Windows_NT)
-	@echo "depend: skipped on Windows (makedepend not configured)"
-else
 	touch .depend
 	makedepend -f .depend -Y. --$(CFLAGS)-- $(C_SOURCES) 2> /dev/null
 	makedepend -a -f .depend -Y. --$(CXXFLAGS)-- $(CXX_SOURCES) 2> /dev/null
-endif
 
 -include .depend
