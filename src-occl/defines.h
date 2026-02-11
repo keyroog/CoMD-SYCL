@@ -54,19 +54,20 @@
 //#define MAXATOMS 256 
 
 // SYCL sub-group size (equivalent to CUDA warp size)
-// Intel GPUs typically use 16 or 32, we use 32 for compatibility
-#define WARP_SIZE		32
-#define SUB_GROUP_SIZE  32
+// Intel GPUs typically use 16 or 32, CPUs may use 8 or 16
+// NVIDIA GPUs use 32 (warp size)
+#define WARP_SIZE		16
+#define SUB_GROUP_SIZE  16
 
-#define THREAD_ATOM_CTA         128
-#define WARP_ATOM_CTA		128
-#define CTA_CELL_CTA		128
+#define THREAD_ATOM_CTA         64
+#define WARP_ATOM_CTA		64
+#define CTA_CELL_CTA		64
 
 // Work-group sizes for SYCL
-#define WORK_GROUP_SIZE     128
-#define THREAD_ATOM_WG      128
-#define WARP_ATOM_WG        128
-#define CTA_CELL_WG         128
+#define WORK_GROUP_SIZE     64
+#define THREAD_ATOM_WG      64
+#define WARP_ATOM_WG        64
+#define CTA_CELL_WG         64
 
 // NOTE: the following is tuned for Intel GPUs
 #ifdef COMD_DOUBLE
