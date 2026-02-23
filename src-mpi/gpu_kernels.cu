@@ -565,6 +565,13 @@ void buildAtomListGpu(SimFlat *sim, cudaStream_t stream)
 
   // new number of local atoms
   cudaMemcpyAsync(&(sim->gpu.a_list.n), natoms_buf + nCells, sizeof(int), cudaMemcpyDeviceToHost, stream);
+  // a_list.n is consumed on host right after this function returns.
+  // Ensure the async D2H copy is visible before the next force launch computes grid size.
+  cudaStreamSynchronize(stream);
+  if (sim->gpu.a_list.n < 0 || sim->gpu.a_list.n > sim->boxes->nTotalBoxes * MAXATOMS) {
+    fprintf(stderr, "Invalid a_list.n on host after buildAtomListGpu: %d\n", sim->gpu.a_list.n);
+    exit(-1);
+  }
 
   CUDA_GET_LAST_ERROR
 }
@@ -970,7 +977,7 @@ void buildNeighborListKernel_warp(SimGpu sim, real_t rCut2)
                 bool flag = r2 <= rCut2 && r2 > 0.0;
                 unsigned int x;
                 int n;
-                if(x = __ballot(flag))
+                if(x = __ballot_sync(mask2, flag))
                 {
                 //Scan
                     x = x & mask2;
@@ -1029,7 +1036,7 @@ void buildNeighborListKernel_warp(SimGpu sim, real_t rCut2)
                 bool flag = r2 <= rCut2;
                 unsigned int x;
                 int n;
-                if(x = __ballot(flag))
+                if(x = __ballot_sync(mask2, flag))
                 {
                 //Scan
                     x = x & mask2;
@@ -1174,7 +1181,7 @@ void buildNeighborListKernel(SimGpu sim)
                 bool flag = r2 <= rCut2 && r2 > 0.0;
                 unsigned int x;
                 int n;
-                if(x = __ballot(flag))
+                if(x = __ballot_sync(mask2, flag))
                 {
                 //Scan
                     x = x & mask2;
@@ -1230,7 +1237,7 @@ void buildNeighborListKernel(SimGpu sim)
                 bool flag = r2 <= rCut2;
                 unsigned int x;
                 int n;
-                if(x = __ballot(flag))
+                if(x = __ballot_sync(mask2, flag))
                 {
                 //Scan
                     x = x & mask2;
@@ -1419,4 +1426,3 @@ void initHashTableGpu(HashTableGpu* hashTable, int nMaxEntries)
   CUDA_GET_LAST_ERROR
 
 }
-

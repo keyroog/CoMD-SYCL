@@ -66,9 +66,10 @@ __global__ void ReduceEnergy(SimGpu sim, real_t *e_pot, real_t *e_kin)
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 300
     ep = sp[threadIdx.x];
     ek = sk[threadIdx.x];
+    const unsigned int active_mask = __activemask();
     for (int i = WARP_SIZE / 2; i > 0; i /= 2) {
-      ep += __shfl_xor(ep, i);
-      ek += __shfl_xor(ek, i);
+      ep += __shfl_xor_sync(active_mask, ep, i);
+      ek += __shfl_xor_sync(active_mask, ek, i);
     }
 #else
     if (threadIdx.x < 16) sp[threadIdx.x] += sp[threadIdx.x+16];

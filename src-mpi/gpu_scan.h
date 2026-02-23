@@ -29,14 +29,27 @@
 #ifndef __GPU_SCAN_H_
 #define __GPU_SCAN_H_
 
-#include "../cub/cub/cub.cuh"
+#include <cub/cub.cuh>
 
 void scan(int *data, int n, int *partial_sums, cudaStream_t stream)
 {
-  size_t temp_size = n+1;
-  if (temp_size % 256 != 0) temp_size = ((temp_size + 255)/256)*256;	// pad to 256 elements
+  size_t temp_storage_bytes = 0;
+  cub::DeviceScan::ExclusiveSum(NULL, temp_storage_bytes, data, data, n, stream);
 
-  cub::DeviceScan::ExclusiveSum(partial_sums, temp_size, data, data, n, stream);
+  void *temp_storage = (void*)partial_sums;
+  bool own_temp_storage = false;
+
+  // Legacy call sites reserve n ints as scratch. Fallback to dynamic storage if CUB needs more.
+  if (temp_storage == NULL || temp_storage_bytes > (size_t)n * sizeof(int)) {
+    cudaMalloc(&temp_storage, temp_storage_bytes);
+    own_temp_storage = true;
+  }
+
+  cub::DeviceScan::ExclusiveSum(temp_storage, temp_storage_bytes, data, data, n, stream);
+
+  if (own_temp_storage) {
+    cudaFree(temp_storage);
+  }
 }
 
 #endif

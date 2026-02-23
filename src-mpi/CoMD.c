@@ -13,7 +13,7 @@
 ///
 /// The current version of CoMD is available from:
 /// http://exmatex.github.io/CoMD
-///
+///CoMD-CUDA/src-mpi
 /// To contact the developers of CoMD send email to: exmatex-comd@llnl.gov.
 ///
 /// Table of Contents
@@ -227,6 +227,12 @@ SimFlat* initSimulation(Command cmd)
       cmd.xproc, cmd.yproc, cmd.zproc, globalExtent);
 
    sim->usePairlist = cmd.usePairlist;
+   if (sim->usePairlist && (cmd.doeam || sim->method != CTA_CELL))
+   {
+      if (printRank())
+         printf("Warning: usePairlist is supported only for Lennard-Jones with cta_cell. Disabling usePairlist.\n");
+      sim->usePairlist = 0;
+   }
    if(sim->usePairlist)
    {
        sim->gpu.atoms.neighborList.forceRebuildFlag = 1;

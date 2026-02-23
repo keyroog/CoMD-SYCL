@@ -187,6 +187,7 @@
 Command parseCommandLine(int argc, char** argv)
 {
    Command cmd;
+   memset(&cmd, 0, sizeof(Command));
 
    memset(cmd.potDir, 0, 1024);
    memset(cmd.potName, 0, 1024);
@@ -218,6 +219,7 @@ Command parseCommandLine(int argc, char** argv)
 
    cmd.ljInterpolation = 0;
    cmd.spline = 0;
+   cmd.usePairlist = 0;
 
    int help=0;
    // add arguments for processing.  Please update the html documentation too!
@@ -296,6 +298,7 @@ void printCmdYaml(FILE* file, Command* cmd)
            "  GPU async opt: %d\n"
            "  GPU profiling mode: %d\n"
            "  GPU method: %s\n"
+           "  GPU usePairlist: %d\n"
            "  Space-filling (Hilbert): %d\n"
            "\n",
            cmd->doeam,
@@ -310,11 +313,11 @@ void printCmdYaml(FILE* file, Command* cmd)
            cmd->dt,
            cmd->temperature,
            cmd->initialDelta,
-	   cmd->gpuAsync,
-	   cmd->gpuProfile,
-	   cmd->method,
-	   cmd->doHilbert
+		   cmd->gpuAsync,
+		   cmd->gpuProfile,
+		   cmd->method,
+		   cmd->usePairlist,
+		   cmd->doHilbert
    );
    fflush(file);
 }
-

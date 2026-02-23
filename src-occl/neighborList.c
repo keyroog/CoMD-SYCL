@@ -50,7 +50,7 @@ int neighborListUpdateRequiredCpu(NeighborList* neighborList, LinkCell*const  bo
 NeighborList* initNeighborList(const int nLocalBoxes, const real_t skinDistance)
 {
 
-   NeighborList* neighborList = comdMalloc(sizeof(NeighborList)); 
+   NeighborList* neighborList = (NeighborList*)comdMalloc(sizeof(NeighborList));
 
    neighborList->nMaxLocal = MAXATOMS*nLocalBoxes; // make this list a little larger to make room for migrated particles
    neighborList->maxNeighbors = 1024;//TODO: choose this value dynamically
@@ -62,8 +62,8 @@ NeighborList* initNeighborList(const int nLocalBoxes, const real_t skinDistance)
    neighborList->updateLinkCellsRequired = 0;
    neighborList->forceRebuildFlag = 1; 
 
-   neighborList->list = comdMalloc(sizeof(int) * neighborList->nMaxLocal * neighborList->maxNeighbors); 
-   neighborList->nNeighbors = comdMalloc(sizeof(int) * neighborList->nMaxLocal);
+   neighborList->list = (int*)comdMalloc(sizeof(int) * neighborList->nMaxLocal * neighborList->maxNeighbors);
+   neighborList->nNeighbors = (int*)comdMalloc(sizeof(int) * neighborList->nMaxLocal);
    malloc_vec(&(neighborList->lastR), neighborList->nMaxLocal);
 
    emptyNeighborList(neighborList);

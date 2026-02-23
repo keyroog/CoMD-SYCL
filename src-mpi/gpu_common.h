@@ -60,10 +60,12 @@ void interpolate(InterpolationObjectGpu table, real_t r, real_t &f, real_t &df)
    real_t ri = floor(r);
    
    int ii = (int)ri;
-   assert(ii < table.n );
+   // GPU path reads ii..ii+3, so ii must stay within [0, n-1].
+   if (ii < 0) ii = 0;
+   if (ii >= table.n) ii = table.n - 1;
 
    // reset r to fractional distance
-   r = r - ri;
+   r = r - (real_t)ii;
    
     // using LDG on Kepler only
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 350  
@@ -107,8 +109,10 @@ void interpolateSpline(InterpolationSplineObjectGpu table, real_t r2, real_t &f,
    r = r * table.invDx - table.invDxXx0;
    
    real_t ri = floor(r);
-   
-   int ii = 4*(int)ri;
+   int bin = (int)ri;
+   if (bin < 0) bin = 0;
+   if (bin >= table.n) bin = table.n - 1;
+   int ii = 4*bin;
 
     // using LDG on Kepler only
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 350  
@@ -255,13 +259,14 @@ void warp_reduce(real_t &ifx, real_t &ify, real_t &ifz, real_t &ie, real_t &irho
 {
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 300
   // warp reduction
+  const unsigned int active_mask = __activemask();
   for (int i = WARP_SIZE / 2; i > 0; i /= 2) {
-    ifx += __shfl_xor(ifx, i);
-    ify += __shfl_xor(ify, i);
-    ifz += __shfl_xor(ifz, i);
+    ifx += __shfl_xor_sync(active_mask, ifx, i);
+    ify += __shfl_xor_sync(active_mask, ify, i);
+    ifz += __shfl_xor_sync(active_mask, ifz, i);
     if (step == 1) {
-      ie += __shfl_xor(ie, i);
-      irho += __shfl_xor(irho, i);
+      ie += __shfl_xor_sync(active_mask, ie, i);
+      irho += __shfl_xor_sync(active_mask, irho, i);
     }
   }
 #else

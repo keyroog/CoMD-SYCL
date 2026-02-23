@@ -156,8 +156,8 @@ void EAM_Force_cta_cell(SimGpu sim, int *cells_list)
 
 	  // aggregate neighbors that passes cut-off check
 	  // warp-scan using ballot/popc 	
-	  uint flag = (r2 <= rCut2 && r2 > 0 && (tail == 0 || j < tail));  // flag(lane id) 
-	  uint bits = __ballot(flag);                           // 0 1 0 1  1 1 0 0 = flag(0) flag(1) .. flag(31)
+	  uint flag = ((tail == 0 || j < tail) && r2 <= rCut2 && r2 > 0);  // flag(lane id) 
+	  uint bits = __ballot_sync(__activemask(), flag);       // 0 1 0 1  1 1 0 0 = flag(0) flag(1) .. flag(31)
 	  uint mask = bfi(0, 0xffffffff, 0, lane_id);         // bits < lane id = 1, bits > lane id = 0
 	  uint exc = __popc(mask & bits);                       // exclusive scan 
 
@@ -293,4 +293,3 @@ void EAM_Force_cta_cell2(SimGpu sim, int *cell_list)
     sim.atoms.e[iOff] += fEmbed;
   }
 }
-

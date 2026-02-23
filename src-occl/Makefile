@@ -1,158 +1,174 @@
-# Makefile for SYCL version with oneCCL support
+# Makefile for CoMD-SYCL-OneCCL
+#
+# Requires:
+#   - DPCPP_HOME   pointing to a DPC++ compiler with CUDA/NVPTX support
+#   - ONECCL_INSTALL  pointing to OneCCL installation (with NCCL backend)
+#   - MPI_HOME     pointing to the MPI bundled with OneCCL
+#   - NCCL_ROOT    pointing to the NCCL build directory
+#   - CUDA_HOME    pointing to the CUDA toolkit  (module load cuda12.8)
+#
+# Typical usage after sourcing the environment:
+#   make            # build CoMD-sycl-occl
+#   make clean      # remove objects
 
 SHELL = /bin/bash
 
-### Specify Intel oneAPI paths if necessary
-ONEAPI_ROOT ?= /opt/intel/oneapi
-
-### CoMD can be built in either double or single precision and with or
-### without MPI.  Select desired precision and MPI here.
-
-# double precision (ON/OFF)
+# ---- User-tunable knobs ---------------------------------------------------
 DOUBLE_PRECISION = ON
-# MPI for parallel (ON/OFF)
-DO_MPI = ON
-# oneCCL for collective operations (ON/OFF)
-USE_ONECCL = ON
-# Maximum number of atoms that can be stored in a link cell
-MAXATOMS = 256
+DO_MPI           = ON
+MAXATOMS         = 64
+DEBUG            = OFF
 
-### Set your desired C++ compiler and any necessary flags.
-### For SYCL we use icpx (Intel oneAPI DPC++ compiler)
-CXX = icpx
-CC = mpicc
+# ---- Toolchain -------------------------------------------------------------
+# DPC++ compiler for SYCL/C++ sources
+DPCPP_HOME    ?= $(HOME)/dpcpp-cuda
+CXX            = $(DPCPP_HOME)/bin/clang++
 
-# SYCL flags
-SYCL_FLAGS = -fsycl -fsycl-targets=spir64
-# For Intel GPUs specifically:
-# SYCL_FLAGS = -fsycl -fsycl-targets=spir64_gen -Xs "-device pvc"
+# MPI C compiler for pure-C sources (bundled with OneCCL)
+MPI_HOME      ?= $(ONECCL_INSTALL)/opt/mpi
+CC             = $(MPI_HOME)/bin/mpicc
 
-CXXFLAGS = -std=c++17 -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -DMAXATOMS=$(MAXATOMS) $(SYCL_FLAGS)
-CFLAGS = -std=c99 -Wno-unused-result -DMAXATOMS=$(MAXATOMS)
+# OneCCL
+ONECCL_INSTALL ?= $(HOME)/oneccl-2021.17-dpcpp-install-cuda
 
-OPTFLAGS = -g -O3
-INCLUDES = 
-C_LIB = -lm
+# NCCL (used by OneCCL backend)
+NCCL_ROOT     ?= $(HOME)/nccl/build
 
-### If you need to specify include paths, library paths, or link flags
-### for MPI, put them here.  Put both -L and -l switches into MPI_LIB.
-MPI_LIB = -lmpi
-MPI_INCLUDE = 
+# CUDA toolkit (for libcudart at link time and cuda headers)
+CUDA_HOME     ?= $(CUDA_PATH)
 
-### oneCCL paths
-CCL_ROOT ?= $(ONEAPI_ROOT)/ccl/latest
-CCL_INCLUDE = -I$(CCL_ROOT)/include
-CCL_LIB = -L$(CCL_ROOT)/lib -lccl
+# ---- SYCL flags ------------------------------------------------------------
+SYCL_FLAGS  = -fsycl -fsycl-targets=nvptx64-nvidia-cuda
 
-### A place to specify any other include or library switches your
-### platform requires.
-OTHER_LIB = 
-OTHER_INCLUDE = 
+# ---- Common defines --------------------------------------------------------
+COMMON_DEFS = -DMAXATOMS=$(MAXATOMS)
 
-#########################################
-### Below here, it is pitch black.  
-### You are likely to be eaten by a grue.
-##########################################
-
-# clear all suffixes
-.SUFFIXES:
-# list only those that we use 
-.SUFFIXES: .c .cpp .o
-
-.PHONY: DEFAULT clean distclean depend
-
-BIN_DIR=../bin
-
-# Check for double precision
 ifeq ($(DOUBLE_PRECISION), ON)
-CFLAGS += -DCOMD_DOUBLE
-CXXFLAGS += -DCOMD_DOUBLE
+COMMON_DEFS += -DCOMD_DOUBLE
 else
-CFLAGS += -DCOMD_SINGLE
-CXXFLAGS += -DCOMD_SINGLE
+COMMON_DEFS += -DCOMD_SINGLE
 endif
 
-# Set executable name and add includes & libraries for MPI if needed.
-CoMD_VARIANT = CoMD-sycl
 ifeq ($(DO_MPI), ON)
-CoMD_VARIANT = CoMD-sycl-mpi
-INCLUDES += ${MPI_INCLUDE}
-CFLAGS += -DDO_MPI
-CXXFLAGS += -DDO_MPI
-LDFLAGS += ${MPI_LIB}
+COMMON_DEFS += -DDO_MPI
 endif
 
-# Add oneCCL support
-ifeq ($(USE_ONECCL), ON)
-INCLUDES += ${CCL_INCLUDE}
-CXXFLAGS += -DUSE_ONECCL
-LDFLAGS += ${CCL_LIB}
-CoMD_VARIANT = CoMD-sycl-mpi-ccl
+ifeq ($(DEBUG), ON)
+COMMON_DEFS += -DDEBUG -O0 -g
+C_OPT   = -O0 -g
+CXX_OPT = -O0 -g
+else
+COMMON_DEFS += -DNDEBUG
+C_OPT   = -g -O3
+CXX_OPT = -g -O2
 endif
 
-CoMD_EXE = ${BIN_DIR}/${CoMD_VARIANT}
+# ---- C compiler flags (pure C sources) ------------------------------------
+CFLAGS  = -std=c99 -Wno-unused-result $(C_OPT) $(COMMON_DEFS)
 
-LDFLAGS += ${C_LIB} ${OTHER_LIB}
-CFLAGS  += ${OPTFLAGS} ${INCLUDES} ${OTHER_INCLUDE}
-CXXFLAGS += ${OPTFLAGS} ${INCLUDES} ${OTHER_INCLUDE}
+# ---- C++ / SYCL compiler flags (.dp.cpp + parallel.cpp) -------------------
+CXXFLAGS = $(SYCL_FLAGS) $(CXX_OPT) $(COMMON_DEFS) -w
 
-# C files to be compiled with mpicc/gcc
-C_SOURCES = cmdLineParser.c \
-            decomposition.c \
-            hashTable.c \
-            initAtoms.c \
-            ljForce.c \
-            mycommand.c \
-            mytype.c \
-            neighborList.c \
-            performanceTimers.c \
-            random.c \
-            yamlOutput.c
+# ---- Include paths ---------------------------------------------------------
+C_INCLUDES   = -I. -I$(MPI_HOME)/include
+CXX_INCLUDES = -I. -Iinclude -I$(MPI_HOME)/include -I$(ONECCL_INSTALL)/include \
+               -I$(CUDA_HOME)/include
 
-C_OBJECTS = $(C_SOURCES:.c=.o)
+# ---- Library paths and libraries -------------------------------------------
+LDFLAGS  = $(SYCL_FLAGS)
+LDFLAGS += -L$(MPI_HOME)/lib -lmpi
+LDFLAGS += -L$(ONECCL_INSTALL)/lib -lccl
+LDFLAGS += -lm -lstdc++
 
-# C++ files to be compiled with icpx (SYCL)
-CXX_SOURCES = CoMD.cpp \
-              parallel.cpp \
-              gpu_utility.cpp \
-              gpu_kernels.cpp \
-              haloExchange.cpp \
-              linkCells.cpp \
-              eam.cpp \
-              timestep.cpp \
-              gpu_neighborList.cpp
+# ---- Source lists ----------------------------------------------------------
 
-CXX_OBJECTS = $(CXX_SOURCES:.cpp=.o)
+# Pure C sources (compiled with mpicc -std=c99)
+# These files have no transitive dependency on SYCL/DPCT headers.
+C_SOURCES = cmdLineParser.c decomposition.c hashTable.c \
+            mycommand.c mytype.c \
+            performanceTimers.c random.c yamlOutput.c
 
-OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS)
+# C sources that include headers pulling in SYCL/DPCT (compiled with clang++)
+# initAtoms.c  -> timestep.h -> CoMDTypes.h -> <sycl/sycl.hpp>
+# ljForce.c    -> CoMDTypes.h -> <sycl/sycl.hpp>
+# neighborList.c -> CoMDTypes.h -> <sycl/sycl.hpp>
+CXX_C_SOURCES = initAtoms.c ljForce.c neighborList.c
 
-DEFAULT: ${CoMD_EXE}
+# SYCL/C++ sources (compiled with clang++ -fsycl)
+CXX_SOURCES = CoMD.c.dp.cpp eam.c.dp.cpp gpu_kernels.dp.cpp \
+              gpu_neighborList.c.dp.cpp gpu_utility.c.dp.cpp \
+              haloExchange.c.dp.cpp linkCells.c.dp.cpp timestep.c.dp.cpp \
+              parallel.cpp
 
+# ---- Object files ----------------------------------------------------------
+C_OBJECTS     = $(C_SOURCES:.c=.o)
+CXX_C_OBJECTS = $(CXX_C_SOURCES:.c=.o)
+
+# Handle the various .dp.cpp suffix patterns
+CXX_OBJECTS = $(patsubst %.c.dp.cpp,%.c.dp.o,$(filter %.c.dp.cpp,$(CXX_SOURCES))) \
+              $(patsubst %.dp.cpp,%.dp.o,$(filter %.dp.cpp,$(filter-out %.c.dp.cpp,$(CXX_SOURCES)))) \
+              $(patsubst %.cpp,%.o,$(filter-out %.dp.cpp,$(CXX_SOURCES)))
+
+ALL_OBJECTS = $(C_OBJECTS) $(CXX_C_OBJECTS) $(CXX_OBJECTS)
+
+# ---- Executable ------------------------------------------------------------
+BIN_DIR = ../bin
+ifeq ($(DO_MPI), ON)
+CoMD_VARIANT = CoMD-sycl-occl
+else
+CoMD_VARIANT = CoMD-sycl
+endif
+CoMD_EXE = $(BIN_DIR)/$(CoMD_VARIANT)
+
+# ---- Rules -----------------------------------------------------------------
+.SUFFIXES:
+.SUFFIXES: .c .cpp .dp.cpp .o
+
+.PHONY: DEFAULT clean distclean
+
+DEFAULT: $(CoMD_EXE)
+
+# ------- C files that need SYCL includes (compiled as C++ with clang++) ------
+# These explicit rules take precedence over the generic %.o: %.c rule below.
+initAtoms.o: initAtoms.c
+	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
+
+ljForce.o: ljForce.c
+	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
+
+neighborList.o: neighborList.c
+	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
+
+# ------- Pure C sources -> .o -----------------------------------------------
 %.o: %.c
-	${CC} ${CFLAGS} -c $< -o $@
+	$(CC) $(CFLAGS) $(C_INCLUDES) -c $< -o $@
 
-%.o: %.cpp
-	${CXX} ${CXXFLAGS} -c $< -o $@
+# ------- SYCL sources -------------------------------------------------------
+# .c.dp.cpp -> .c.dp.o
+%.c.dp.o: %.c.dp.cpp
+	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
 
-${CoMD_EXE}: ${BIN_DIR} CoMD_info.h ${OBJECTS}
-	${CXX} ${CXXFLAGS} -o ${CoMD_EXE} ${OBJECTS} ${LDFLAGS}
+# .dp.cpp -> .dp.o
+%.dp.o: %.dp.cpp
+	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
+
+# parallel.cpp -> parallel.o
+parallel.o: parallel.cpp
+	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
+
+# ------- Link ----------------------------------------------------------------
+$(CoMD_EXE): $(BIN_DIR) CoMD_info.h $(ALL_OBJECTS)
+	$(CXX) -o $(CoMD_EXE) $(ALL_OBJECTS) $(LDFLAGS)
 
 CoMD_info.h: Makefile
-	./generate_info_header ${CoMD_VARIANT} "$(CXX)" "$(CXXFLAGS)" "$(LDFLAGS)"
+	./generate_info_header $(CoMD_VARIANT) "$(CXX)" "$(CXXFLAGS)" "$(LDFLAGS)"
 
-${BIN_DIR}:
-	@if [ ! -d ${BIN_DIR} ]; then mkdir -p ${BIN_DIR} ; fi
+$(BIN_DIR):
+	@if [ ! -d $(BIN_DIR) ]; then mkdir -p $(BIN_DIR) ; fi
 
 clean:
 	rm -f *.o CoMD_info.h .depend
 
 distclean: clean
-	rm -f ${CoMD_EXE} .depend.bak
+	rm -f $(CoMD_EXE) .depend.bak
 	rm -rf html latex
-
-depend:
-	touch .depend
-	makedepend -f .depend -Y. --$(CFLAGS)-- $(C_SOURCES) 2> /dev/null
-	makedepend -a -f .depend -Y. --$(CXXFLAGS)-- $(CXX_SOURCES) 2> /dev/null
-
--include .depend

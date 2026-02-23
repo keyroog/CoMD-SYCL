@@ -245,8 +245,9 @@ __global__ void CompactAtoms(SimGpu sim, int num_cells, int *flags)
   if (threadIdx.x < 32) {
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 300
     jAtom = natoms[threadIdx.x];
+    const unsigned int active_mask = __activemask();
     for (int i = WARP_SIZE / 2; i > 0; i /= 2) {
-      jAtom = max(jAtom, __shfl_xor(jAtom, i));
+      jAtom = max(jAtom, __shfl_xor_sync(active_mask, jAtom, i));
     }
 #else
     if (threadIdx.x < 16) natoms[threadIdx.x] = max(natoms[threadIdx.x], natoms[threadIdx.x+16]);
@@ -706,7 +707,9 @@ __global__ void ShuffleAtomsData(SimGpu sim, int nLocalBoxes, int nTotalBoxes, i
     else iBox = boundary_cells[warp_id];
   int iAtom = lane_id;
 
-  if (iBox >= nTotalBoxes || new_indices[iBox * MAXATOMS] < 0) return;
+  const int nAtomsInBox = (iBox < nTotalBoxes) ? sim.boxes.nAtoms[iBox] : 0;
+  const unsigned int active_mask = __ballot_sync(0xFFFFFFFF, iAtom < nAtomsInBox);
+  if (iBox >= nTotalBoxes || active_mask == 0 || new_indices[iBox * MAXATOMS] < 0) return;
 
   int iOff = iBox * MAXATOMS + iAtom;
 
@@ -714,7 +717,7 @@ __global__ void ShuffleAtomsData(SimGpu sim, int nLocalBoxes, int nTotalBoxes, i
   real_t rx, ry, rz, px, py, pz;
 
   // load into regs
-  if (iAtom < sim.boxes.nAtoms[iBox]) {
+  if (iAtom < nAtomsInBox) {
     id = sim.atoms.iSpecies[iOff];
     rx = sim.atoms.r.x[iOff];
     ry = sim.atoms.r.y[iOff];
@@ -725,7 +728,7 @@ __global__ void ShuffleAtomsData(SimGpu sim, int nLocalBoxes, int nTotalBoxes, i
   }
 
   int idx;
-  if (iAtom < sim.boxes.nAtoms[iBox])
+  if (iAtom < nAtomsInBox)
     idx = new_indices[iOff] - iBox * MAXATOMS;
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ < 300
@@ -741,14 +744,14 @@ __global__ void ShuffleAtomsData(SimGpu sim, int nLocalBoxes, int nTotalBoxes, i
     sim.atoms.p.z[iOff] = __shfl(pz, idx, shfl_mem);
   }
 #else
-  if (iAtom < sim.boxes.nAtoms[iBox]) {
-    sim.atoms.iSpecies[iOff] = __shfl(id, idx);
-    sim.atoms.r.x[iOff] = __shfl(rx, idx);
-    sim.atoms.r.y[iOff] = __shfl(ry, idx);
-    sim.atoms.r.z[iOff] = __shfl(rz, idx);
-    sim.atoms.p.x[iOff] = __shfl(px, idx);
-    sim.atoms.p.y[iOff] = __shfl(py, idx);
-    sim.atoms.p.z[iOff] = __shfl(pz, idx);
+  if (iAtom < nAtomsInBox) {
+    sim.atoms.iSpecies[iOff] = __shfl_sync(active_mask, id, idx);
+    sim.atoms.r.x[iOff] = __shfl_sync(active_mask, rx, idx);
+    sim.atoms.r.y[iOff] = __shfl_sync(active_mask, ry, idx);
+    sim.atoms.r.z[iOff] = __shfl_sync(active_mask, rz, idx);
+    sim.atoms.p.x[iOff] = __shfl_sync(active_mask, px, idx);
+    sim.atoms.p.y[iOff] = __shfl_sync(active_mask, py, idx);
+    sim.atoms.p.z[iOff] = __shfl_sync(active_mask, pz, idx);
   }
 #endif
 }

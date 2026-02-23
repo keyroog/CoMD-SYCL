@@ -89,8 +89,8 @@ void EAM_Force_warp_atom(SimGpu sim, AtomListGpu list)
 
     // aggregate neighbors that passes cut-off check
     // warp-scan using ballot/popc 
-    uint flag = (r2 <= rCut2 && r2 > 0 && j < numNeigh);  // flag(lane id) 
-    uint bits = __ballot(flag);                           // 0 1 0 1  1 1 0 0 = flag(0) flag(1) .. flag(31)
+    uint flag = (j < numNeigh && r2 <= rCut2 && r2 > 0);  // flag(lane id) 
+    uint bits = __ballot_sync(__activemask(), flag);       // 0 1 0 1  1 1 0 0 = flag(0) flag(1) .. flag(31)
     uint mask = bfi(0, 0xffffffff, 0, lane_id);           // bits < lane id = 1, bits > lane id = 0
     uint exc = __popc(mask & bits);                       // exclusive scan 
 
@@ -306,18 +306,19 @@ void EAM_Force_warp_atom_NL(SimGpu sim, AtomListGpu list, real_t rCut2)
 
     //Reduction inside warp
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 300
+    const unsigned int active_mask = __activemask();
 #pragma unroll
     for(int j = 1; j < 32; j *= 2)
     {
         if(packSize > j)
         {
-            const real_t tmpx = __shfl_down(ifx, j, packSize);
-            const real_t tmpy = __shfl_down(ify, j, packSize);
-            const real_t tmpz = __shfl_down(ifz, j, packSize);
+            const real_t tmpx = __shfl_down_sync(active_mask, ifx, j, packSize);
+            const real_t tmpy = __shfl_down_sync(active_mask, ify, j, packSize);
+            const real_t tmpz = __shfl_down_sync(active_mask, ifz, j, packSize);
             if(step == 1)
             {
-                const real_t tmpe = __shfl_down(ie, j, packSize);
-                const real_t tmprho = __shfl_down(irho, j, packSize);
+                const real_t tmpe = __shfl_down_sync(active_mask, ie, j, packSize);
+                const real_t tmprho = __shfl_down_sync(active_mask, irho, j, packSize);
                 ie += tmpe;
                 irho += tmprho;
             }
@@ -361,5 +362,4 @@ void EAM_Force_warp_atom_NL(SimGpu sim, AtomListGpu list, real_t rCut2)
         }
     }
 }
-
 

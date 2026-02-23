@@ -1,3 +1,4 @@
+# Template EAM allineato a Makefile (config corrente)
 # Makefile for CUDA version
 
 SHELL = /bin/bash
@@ -49,9 +50,8 @@ NVCC_FLAGS += -DMAXATOMS=$(MAXATOMS)
 NVCC_FLAGS += --ptxas-options=-v -lineinfo
 
 # add support for various cuda architectures below
-NVCC_FLAGS += -gencode arch=compute_35,code=sm_35
-NVCC_FLAGS += -gencode arch=compute_52,code=sm_52
-NVCC_FLAGS += -gencode arch=compute_60,code=sm_60
+NVCC_FLAGS += -gencode arch=compute_70,code=sm_70
+NVCC_FLAGS += -gencode arch=compute_80,code=sm_80
 
 # add precision flag for CUDA targets
 ifeq ($(DOUBLE_PRECISION), ON)
@@ -91,9 +91,9 @@ CFLAGS += -DCOMD_SINGLE
 endif
 
 # Set executable name and add includes & libraries for MPI if needed.
-CoMD_VARIANT = CoMD-cuda
+CoMD_VARIANT = CoMD-cuda-eam
 ifeq ($(DO_MPI), ON)
-CoMD_VARIANT = CoMD-cuda-mpi
+CoMD_VARIANT = CoMD-cuda-mpi-eam
 INCLUDES += ${MPI_INCLUDE}
 CFLAGS += -DDO_MPI
 LDFLAGS += ${MPI_LIB}
@@ -123,7 +123,7 @@ DEFAULT: ${CoMD_EXE}
 ${CoMD_EXE}: ${BIN_DIR} CoMD_info.h ${OBJECTS} ${CU_OBJECTS}
 	${CC} ${CFLAGS} -o ${CoMD_EXE} ${OBJECTS} ${CU_OBJECTS} ${LDFLAGS}
 
-CoMD_info.h: Makefile
+CoMD_info.h: Makefile.EAM
 	./generate_info_header ${CoMD_VARIANT} "$(CC)" "$(CFLAGS)" "$(LDFLAGS)"
 
 ${BIN_DIR}:

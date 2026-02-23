@@ -231,7 +231,7 @@ void LJ_Force_cta_cell_pairlist(SimGpu sim, int * cells_list, real_t rCut2, real
                     // distance^2
                     real_t r2 = dx*dx + dy*dy + dz*dz;
 
-                    if(genPairlist && __any(r2 <= plcutoff * plcutoff))
+                    if(genPairlist && __any_sync(__activemask(), r2 <= plcutoff * plcutoff))
                     {
                         flag |= mask;
                     
@@ -272,4 +272,3 @@ void LJ_Force_cta_cell_pairlist(SimGpu sim, int * cells_list, real_t rCut2, real
 
     }
 }
-

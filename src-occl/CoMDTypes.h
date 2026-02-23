@@ -1,9 +1,11 @@
 /// \file
-/// CoMD data structures for SYCL version.
+/// CoMD data structures.
 
 #ifndef __COMDTYPES_H_
 #define __COMDTYPES_H_
 
+#include <sycl/sycl.hpp>
+#include <dpct/dpct.hpp>
 #include <stdio.h>
 #include "mytype.h"
 #include "haloExchange.h"
@@ -12,15 +14,19 @@
 #include "initAtoms.h"
 #include "gpu_types.h"
 
-// windows 
-#if defined(_WIN32) || defined(_WIN64) 
-  #define snprintf _snprintf 
-  #define vsnprintf _vsnprintf 
-  #define strcasecmp _stricmp 
-  #define strncasecmp _strnicmp 
+// windows
+#if defined(_WIN32) || defined(_WIN64)
+  #define snprintf _snprintf
+  #define vsnprintf _vsnprintf
+  #define strcasecmp _stricmp
+  #define strncasecmp _strnicmp
 #endif
 
-#define EXTERN_C extern "C"
+#ifdef __cplusplus
+  #define EXTERN_C extern "C"
+#else
+  #define EXTERN_C extern
+#endif
 
 struct SimFlatSt;
 
@@ -109,8 +115,9 @@ typedef struct SimFlatSt
    int *boundary1_cells_d;	//<! boundary cells that are neighbors to halos (outer ring of the local Cells)
    int *boundary1_cells_h;	//<! boundary cells that are neighbors to halos (outer ring of the local Cells)
 
-   // SYCL doesn't use streams like CUDA, operations are managed through queues
-   // Async execution handled by SYCL queue
+   // streams for async execution
+   dpct::queue_ptr boundary_stream;
+   dpct::queue_ptr interior_stream;
 
    // gpu options
    int gpuAsync;

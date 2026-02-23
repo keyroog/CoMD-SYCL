@@ -5,6 +5,10 @@
 
 #include <stdio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /// Timer handles
 enum TimerHandle{totalTimer, loopTimer, timestepTimer,
                  positionTimer, velocityTimer,  neighborListBuildTimer, redistributeTimer,
@@ -27,13 +31,13 @@ enum TimerHandle{totalTimer, loopTimer, timestepTimer,
 ///
 #ifndef NTIMING
 #define startTimer(handle)    \
-   /* g_sycl_queue->wait(); */   \
+   /*cudaDeviceSynchronize();*/   \
    do                         \
 {                          \
    profileStart(handle);   \
 } while(0)
 #define stopTimer(handle)     \
-   /* g_sycl_queue->wait(); */   \
+   /*cudaDeviceSynchronize();*/   \
    do                         \
 {                          \
    profileStop(handle);    \
@@ -58,4 +62,8 @@ void printPerformanceResults(int nGlobalAtoms, int printRate);
 
 /// Print timing results to Yaml file
 void printPerformanceResultsYaml(FILE* file);
+
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -34,6 +34,9 @@
 
 #include "mytype.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct HashTableSt
 {
@@ -60,5 +63,9 @@ void emptyHashTable(HashTable* hashTable);
 
 /// resizes the hashtable to a larger value
 void hashTableEnlarge(HashTable *hashTable);
-         
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

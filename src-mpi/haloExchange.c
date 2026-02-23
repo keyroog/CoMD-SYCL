@@ -158,12 +158,9 @@ HaloExchange* initAtomHaloExchange(Domain* domain, LinkCell* boxes)
    int size = boxes->nLocalBoxes+1;
    if (size % 256 != 0) size = ((size + 255)/256)*256;
 
-   int partial_size = size/256 + 1;
-   if (partial_size % 256 != 0) partial_size = ((partial_size + 255)/256)*256;
-
    cudaMalloc((void**)&parms->d_natoms_buf, size * sizeof(int));
    parms->h_natoms_buf = (int*) malloc( size * sizeof(int));
-   cudaMalloc((void**)&parms->d_partial_sums, partial_size * sizeof(int));
+   cudaMalloc((void**)&parms->d_partial_sums, size * sizeof(int));
 
    for (int ii=0; ii<6; ++ii)
    {
@@ -255,7 +252,7 @@ HaloExchange* initForceHaloExchange(Domain* domain, LinkCell* boxes, int useGPU)
       int size = parms->nCells[ii]+1;
       if (size % 256 != 0) size = ((size + 255)/256)*256;
       cudaMalloc((void**)&parms->natoms_buf[ii], size * sizeof(int));
-      cudaMalloc((void**)&parms->partial_sums[ii], (size/256 + 1) * sizeof(int));
+      cudaMalloc((void**)&parms->partial_sums[ii], size * sizeof(int));
    }
    
    hh->hashTable = NULL;
@@ -779,4 +776,3 @@ int sortAtomsById(const void* a, const void* b)
       return -1;
    return 1;
 }
-

@@ -47,9 +47,13 @@ extern "C" {
 #endif
 
 void malloc_vec(vec_t *ptr, int nEntries);
+
 void free_vec(vec_t *ptr);
+
 void zeroVec(vec_t* a, int iOff);
+
 void zeroVecAll(vec_t* a, int n);
+
 void copyVec(vec_t* a, int iOff, int jOff);
 
 #ifdef __cplusplus

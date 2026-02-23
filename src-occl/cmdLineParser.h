@@ -7,6 +7,10 @@
 #ifndef CMDLINEPARSER_H_
 #define CMDLINEPARSER_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /// Specifies a command line argument that should be accepted by the program.
 /// \param [in]  longOption  The long name of option i.e., --optionname
 /// \param [in]  shortOption The short name of option i.e., -o
@@ -36,5 +40,9 @@ void processArgs(int argc, char **argv);
 void printArgs(void);
 
 void freeArgs(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

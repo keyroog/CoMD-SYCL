@@ -1,6 +1,5 @@
 /*************************************************************************
  * Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
- * SYCL port (c) 2024
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,17 +29,13 @@
 #ifndef __GPU_UTILITY_H_
 #define __GPU_UTILITY_H_
 
+#include <sycl/sycl.hpp>
+#include <dpct/dpct.hpp>
 #include "CoMDTypes.h"
 #include "gpu_types.h"
 #include <memory.h>
-#include <stdlib.h>
 
-// Only include SYCL headers in C++ code
-#ifdef __cplusplus
-#include <sycl/sycl.hpp>
-// Global SYCL queue declaration (only visible in C++)
-extern sycl::queue* g_sycl_queue;
-#endif
+#include <stdlib.h>
 
 #if defined(_WIN32) || defined(_WIN64) 
 #include <winsock2.h>
@@ -54,10 +49,6 @@ extern sycl::queue* g_sycl_queue;
 
 #ifdef DO_MPI
 #include <mpi.h>
-#endif
-
-#ifdef __cplusplus
-extern "C" {
 #endif
 
 struct LinkCellsGpuSt;
@@ -74,56 +65,32 @@ void updateGpuHalo(SimFlat *sim);
 void updateNAtomsCpu(SimFlat* sim);
 void updateNAtomsGpu(SimFlat* sim);
 void emptyHaloCellsGpu(SimFlat* sim);
-void syclCopyDtH(void* dst, const void* src, int size);
-void initSplineCoefficients(real_t* gpu_coefficients, int n, real_t* values, real_t x0, real_t invDx);
+void cudaCopyDtH(void* dst, const void* src, int size);
 
 int compactHaloCells(SimFlat* sim, char* h_compactAtoms, int* h_cellOffset);
 
-#ifdef __cplusplus
-}  // end extern "C"
-
-// SYCL error checking macro - only available in C++
-#define SYCL_CHECK(command)                                                     \
-{                                                                               \
-  try {                                                                         \
-    command;                                                                    \
-  } catch (sycl::exception const& e) {                                          \
-    fprintf(stderr, "Error in file %s at line %d\n", __FILE__, __LINE__);       \
-    fprintf(stderr, "SYCL error: %s\n", e.what());                              \
-    exit(-1);                                                                   \
-  }                                                                             \
-}
+/*
+DPCT1009:183: SYCL reports errors using exceptions and does not use error codes.
+Please replace the "get_error_string_dummy(...)" with a real error-handling
+function.
+*/
+#define CUDA_CHECK(command)                                                    \
+   {                                                                           \
+      dpct::get_current_device().queues_wait_and_throw();                      \
+      dpct::err0 status = (command);                                           \
+   }
 
 #ifdef DEBUG
-#ifdef DO_MPI
-#define SYCL_GET_LAST_ERROR                                                     \
-{                                                                               \
-  try {                                                                         \
-    g_sycl_queue->wait_and_throw();                                             \
-  } catch (sycl::exception const& e) {                                          \
-    int rank;                                                                   \
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);                                       \
-    fprintf(stderr, "rank %d: Error in file %s at line %d\n", rank, __FILE__, __LINE__); \
-    fprintf(stderr, "SYCL error: %s\n", e.what());                              \
-    exit(-1);                                                                   \
-  }                                                                             \
+#define CUDA_GET_LAST_ERROR                                             \
+{                                                                       \
+  dpct::get_current_device().queues_wait_and_throw();                   \
 }
 #else
-#define SYCL_GET_LAST_ERROR                                                     \
-{                                                                               \
-  try {                                                                         \
-    g_sycl_queue->wait_and_throw();                                             \
-  } catch (sycl::exception const& e) {                                          \
-    fprintf(stderr, "Error in file %s at line %d\n", __FILE__, __LINE__);       \
-    fprintf(stderr, "SYCL error: %s\n", e.what());                              \
-    exit(-1);                                                                   \
-  }                                                                             \
-}
-#endif
-#else
-#define SYCL_GET_LAST_ERROR 
+#define CUDA_GET_LAST_ERROR
 #endif
 
-#endif  // __cplusplus
 
-#endif  // __GPU_UTILITY_H_
+
+
+
+#endif
