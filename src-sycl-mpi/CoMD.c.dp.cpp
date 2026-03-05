@@ -108,7 +108,6 @@ int main(int argc, char** argv)
    // set active device (assuming homogenous config)
    int deviceId = getMyRank() % numGpus;
    SetupGpu(deviceId);
-
 #else
    SetupGpu(0);
 #endif

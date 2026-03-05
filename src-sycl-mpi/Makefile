@@ -1,12 +1,13 @@
 # Makefile for CoMD-SYCL-MPI
 #
 # Requires:
-#   - DPCPP_HOME pointing to a DPC++ compiler with CUDA/NVPTX support
-#   - MPI_HOME   pointing to an MPI installation
+#   - DPCPP_HOME   pointing to a DPC++ compiler with CUDA/NVPTX support
+#   - MPI_HOME     pointing to the MPI installation
+#   - CUDA_HOME    pointing to the CUDA toolkit  (module load cuda12.8)
 #
-# Typical usage:
-#   make
-#   make clean
+# Typical usage after sourcing the environment:
+#   make            # build CoMD-sycl-mpi
+#   make clean      # remove objects
 
 SHELL = /bin/bash
 
@@ -17,14 +18,19 @@ MAXATOMS         = 64
 DEBUG            = OFF
 
 # ---- Toolchain -------------------------------------------------------------
-DPCPP_HOME ?= $(HOME)/dpcpp-cuda
-CXX        = $(DPCPP_HOME)/bin/clang++
+# DPC++ compiler for SYCL/C++ sources
+DPCPP_HOME    ?= $(HOME)/dpcpp-cuda
+CXX            = $(DPCPP_HOME)/bin/clang++
 
-MPI_HOME ?= /usr
-CC       ?= $(MPI_HOME)/bin/mpicc
+# MPI C compiler for pure-C sources
+MPI_HOME      ?= $(MPI_ROOT)
+CC             = $(MPI_HOME)/bin/mpicc
+
+# CUDA toolkit (for libcudart at link time and cuda headers)
+CUDA_HOME     ?= $(CUDA_PATH)
 
 # ---- SYCL flags ------------------------------------------------------------
-SYCL_FLAGS = -fsycl -fsycl-targets=nvptx64-nvidia-cuda
+SYCL_FLAGS  = -fsycl -fsycl-targets=nvptx64-nvidia-cuda
 
 # ---- Common defines --------------------------------------------------------
 COMMON_DEFS = -DMAXATOMS=$(MAXATOMS)
@@ -49,37 +55,46 @@ C_OPT   = -g -O3
 CXX_OPT = -g -O2
 endif
 
-# ---- C / C++ flags ---------------------------------------------------------
-CFLAGS   = -std=c99 -Wno-unused-result $(C_OPT) $(COMMON_DEFS)
+# ---- C compiler flags (pure C sources) ------------------------------------
+CFLAGS  = -std=c99 -Wno-unused-result $(C_OPT) $(COMMON_DEFS)
+
+# ---- C++ / SYCL compiler flags (.dp.cpp + parallel.cpp) -------------------
 CXXFLAGS = $(SYCL_FLAGS) $(CXX_OPT) $(COMMON_DEFS) -w
 
 # ---- Include paths ---------------------------------------------------------
 C_INCLUDES   = -I. -I$(MPI_HOME)/include
-CXX_INCLUDES = -I. -Iinclude -I$(MPI_HOME)/include
+CXX_INCLUDES = -I. -Iinclude -I$(MPI_HOME)/include \
+               -I$(CUDA_HOME)/include
 
-# ---- Link flags ------------------------------------------------------------
+# ---- Library paths and libraries -------------------------------------------
 LDFLAGS  = $(SYCL_FLAGS)
-ifeq ($(DO_MPI), ON)
 LDFLAGS += -L$(MPI_HOME)/lib -lmpi
-endif
 LDFLAGS += -lm -lstdc++
 
 # ---- Source lists ----------------------------------------------------------
+
+# Pure C sources (compiled with mpicc -std=c99)
+# These files have no transitive dependency on SYCL/DPCT headers.
 C_SOURCES = cmdLineParser.c decomposition.c hashTable.c \
-            mycommand.c mytype.c \
+            mycommand.c mytype.c parallel.c \
             performanceTimers.c random.c yamlOutput.c
 
+# C sources that include headers pulling in SYCL/DPCT (compiled with clang++)
+# initAtoms.c  -> timestep.h -> CoMDTypes.h -> <sycl/sycl.hpp>
+# ljForce.c    -> CoMDTypes.h -> <sycl/sycl.hpp>
+# neighborList.c -> CoMDTypes.h -> <sycl/sycl.hpp>
 CXX_C_SOURCES = initAtoms.c ljForce.c neighborList.c
 
+# SYCL/C++ sources (compiled with clang++ -fsycl)
 CXX_SOURCES = CoMD.c.dp.cpp eam.c.dp.cpp gpu_kernels.dp.cpp \
               gpu_neighborList.c.dp.cpp gpu_utility.c.dp.cpp \
-              haloExchange.c.dp.cpp linkCells.c.dp.cpp timestep.c.dp.cpp \
-              parallel.cpp
+              haloExchange.c.dp.cpp linkCells.c.dp.cpp timestep.c.dp.cpp
 
 # ---- Object files ----------------------------------------------------------
 C_OBJECTS     = $(C_SOURCES:.c=.o)
 CXX_C_OBJECTS = $(CXX_C_SOURCES:.c=.o)
 
+# Handle the various .dp.cpp suffix patterns
 CXX_OBJECTS = $(patsubst %.c.dp.cpp,%.c.dp.o,$(filter %.c.dp.cpp,$(CXX_SOURCES))) \
               $(patsubst %.dp.cpp,%.dp.o,$(filter %.dp.cpp,$(filter-out %.c.dp.cpp,$(CXX_SOURCES)))) \
               $(patsubst %.cpp,%.o,$(filter-out %.dp.cpp,$(CXX_SOURCES)))
@@ -103,6 +118,8 @@ CoMD_EXE = $(BIN_DIR)/$(CoMD_VARIANT)
 
 DEFAULT: $(CoMD_EXE)
 
+# ------- C files that need SYCL includes (compiled as C++ with clang++) ------
+# These explicit rules take precedence over the generic %.o: %.c rule below.
 initAtoms.o: initAtoms.c
 	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
 
@@ -112,18 +129,20 @@ ljForce.o: ljForce.c
 neighborList.o: neighborList.c
 	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
 
+# ------- Pure C sources -> .o -----------------------------------------------
 %.o: %.c
 	$(CC) $(CFLAGS) $(C_INCLUDES) -c $< -o $@
 
+# ------- SYCL sources -------------------------------------------------------
+# .c.dp.cpp -> .c.dp.o
 %.c.dp.o: %.c.dp.cpp
 	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
 
+# .dp.cpp -> .dp.o
 %.dp.o: %.dp.cpp
 	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
 
-parallel.o: parallel.cpp
-	$(CXX) $(CXXFLAGS) $(CXX_INCLUDES) -c $< -o $@
-
+# ------- Link ----------------------------------------------------------------
 $(CoMD_EXE): $(BIN_DIR) CoMD_info.h $(ALL_OBJECTS)
 	$(CXX) -o $(CoMD_EXE) $(ALL_OBJECTS) $(LDFLAGS)
 

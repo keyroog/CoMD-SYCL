@@ -1,5 +1,5 @@
 /// \file
-/// Wrappers for MPI communication.
+/// Wrappers for MPI functions.
 
 #ifndef _PARALLEL_H_
 #define _PARALLEL_H_
