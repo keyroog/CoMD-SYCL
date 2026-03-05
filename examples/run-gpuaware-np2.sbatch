@@ -3,7 +3,6 @@
 #SBATCH --ntasks=2
 #SBATCH --ntasks-per-node=2
 #SBATCH --gres=gpu:2
-#SBATCH --cpus-per-task=8
 #SBATCH --time=01:00:00
 #SBATCH --partition=boost_usr_prod
 #SBATCH --account=IscrC_HIGRAPH_0
@@ -17,6 +16,8 @@ source /leonardo/home/userexternal/ssirica0/scripts/cuda_export_variables.sh
 mkdir -p /leonardo/home/userexternal/ssirica0/CoMD-SYCL/logs
 
 GPUAWARE=/leonardo/home/userexternal/ssirica0/CoMD-SYCL/bin/CoMD-cuda-mpi-gpuaware
+
+export OMPI_MCA_opal_cuda_support=1
 
 echo "=== np=2 | Strong Scaling (256k atoms) ==="
 echo "--- [mpi-gpuaware] strong ---"
