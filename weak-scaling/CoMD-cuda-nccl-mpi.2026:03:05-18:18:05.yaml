@@ -1,0 +1,217 @@
+
+Mini-Application Name    : CoMD-cuda-nccl-mpi
+Mini-Application Version : 1.1
+Platform:
+  hostname: login02.leonardo.local
+  kernel name: 'Linux'
+  kernel release: '4.18.0-477.27.1.el8_8.x86_64'
+  processor: 'x86_64'
+Build:
+  CC: '/leonardo/home/userexternal/ssirica0/oneCCL-cuda/opt/mpi/bin/mpicc'
+  compiler version: 'gcc (Spack GCC) 12.2.0'
+  CFLAGS: '-std=c99 -Wno-unused-result -DMAXATOMS=64  -DNDEBUG -g -O5 -DCOMD_DOUBLE -DDO_MPI   -I/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-8.5.0/cuda-12.2.0-o6rr2unwsp4e4av6ukobro6plj7ceeos/include -I/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-12.2.0/nccl-2.22.3-1-7yurwun4kwua24wjthmaf4eruawcscqx/include'
+  LDFLAGS: ' -lm -lstdc++ -L/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-8.5.0/cuda-12.2.0-o6rr2unwsp4e4av6ukobro6plj7ceeos/lib64 -lcudart -L/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-12.2.0/nccl-2.22.3-1-7yurwun4kwua24wjthmaf4eruawcscqx/lib -lnccl'
+  using MPI: true
+  Threading: none
+  Double Precision: true
+Run Date/Time: 2026-03-05, 18:18:05
+
+Command Line Parameters:
+  doeam: 1
+  potDir: pots
+  potName: Cu_u6.eam
+  potType: funcfl
+  nx: 40
+  ny: 40
+  nz: 40
+  xproc: 2
+  yproc: 2
+  zproc: 2
+  Lattice constant: -1 Angstroms
+  nSteps: 100
+  printRate: 10
+  Time step: 1 fs
+  Initial Temperature: 600 K
+  Initial Delta: 0 Angstroms
+
+  GPU async opt: 0
+  GPU profiling mode: 0
+  GPU method: thread_atom
+  GPU usePairlist: 0
+  Space-filling (Hilbert): 0
+
+Simulation data: 
+  Total atoms        : 256000
+  Min global bounds  : [   0.0000000000,   0.0000000000,   0.0000000000 ]
+  Max global bounds  : [ 144.6000000000, 144.6000000000, 144.6000000000 ]
+
+Decomposition data: 
+  Processors         :      2,     2,     2
+  Local boxes        :     14,    14,    14 =     2744
+  Box size           : [   5.1642857143,   5.1642857143,   5.1642857143 ]
+  Box factor         : [   1.0432900433,   1.0432900433,   1.0432900433 ] 
+  Max Link Cell Occupancy: 14 of 64
+
+Potential data: 
+  Potential type  : EAM
+  Species name    : Cu
+  Atomic number   : 29
+  Mass            : 63.55 amu
+  Lattice type    : FCC
+  Lattice spacing : 3.615 Angstroms
+  Cutoff          : 4.95 Angstroms
+
+Memory data: 
+  Intrinsic atom footprint =   88 B/atom 
+  Total atom footprint     =  21.484 MB (  2.69 MB/node)
+  Link cell atom footprint =  14.738 MB/node
+  Link cell atom footprint =  22.000 MB/node (including halo cell data
+
+Performance Results:
+  TotalRanks: 8
+  ReportingTimeUnits: seconds
+Performance Results For Rank 0:
+  Timer: total
+    CallCount: 1
+    AvgPerCall:   1.0835
+    Total:        1.0835
+    PercentLoop:   472.93
+  Timer: loop
+    CallCount: 1
+    AvgPerCall:   0.2291
+    Total:        0.2291
+    PercentLoop:   100.00
+  Timer: timestep
+    CallCount: 10
+    AvgPerCall:   0.0229
+    Total:        0.2286
+    PercentLoop:    99.80
+  Timer:   position
+    CallCount: 100
+    AvgPerCall:   0.0000
+    Total:        0.0002
+    PercentLoop:     0.09
+  Timer:   velocity
+    CallCount: 200
+    AvgPerCall:   0.0000
+    Total:        0.0004
+    PercentLoop:     0.19
+  Timer:   redistribute
+    CallCount: 101
+    AvgPerCall:   0.0015
+    Total:        0.1480
+    PercentLoop:    64.58
+  Timer:     atomHalo
+    CallCount: 101
+    AvgPerCall:   0.0010
+    Total:        0.1046
+    PercentLoop:    45.64
+  Timer:   force
+    CallCount: 101
+    AvgPerCall:   0.0008
+    Total:        0.0831
+    PercentLoop:    36.27
+  Timer:     eamHalo
+    CallCount: 101
+    AvgPerCall:   0.0008
+    Total:        0.0824
+    PercentLoop:    35.95
+  Timer: commHalo
+    CallCount: 606
+    AvgPerCall:   0.0001
+    Total:        0.0820
+    PercentLoop:    35.81
+  Timer: commReduce
+    CallCount: 39
+    AvgPerCall:   0.0015
+    Total:        0.0575
+    PercentLoop:    25.09
+Performance Results Across Ranks:
+  Timer: total
+    MinRank: 5
+    MinTime:   1.0834
+    MaxRank: 2
+    MaxTime:   1.0839
+    AvgTime:   1.0837
+    StdevTime:   0.0002
+  Timer: loop
+    MinRank: 0
+    MinTime:   0.2291
+    MaxRank: 7
+    MaxTime:   0.2291
+    AvgTime:   0.2291
+    StdevTime:   0.0000
+  Timer: timestep
+    MinRank: 0
+    MinTime:   0.2286
+    MaxRank: 7
+    MaxTime:   0.2289
+    AvgTime:   0.2288
+    StdevTime:   0.0001
+  Timer:   position
+    MinRank: 1
+    MinTime:   0.0002
+    MaxRank: 4
+    MaxTime:   0.0002
+    AvgTime:   0.0002
+    StdevTime:   0.0000
+  Timer:   velocity
+    MinRank: 5
+    MinTime:   0.0004
+    MaxRank: 2
+    MaxTime:   0.0005
+    AvgTime:   0.0004
+    StdevTime:   0.0000
+  Timer:   redistribute
+    MinRank: 3
+    MinTime:   0.1410
+    MaxRank: 4
+    MaxTime:   0.1482
+    AvgTime:   0.1449
+    StdevTime:   0.0022
+  Timer:     atomHalo
+    MinRank: 3
+    MinTime:   0.0981
+    MaxRank: 0
+    MaxTime:   0.1046
+    AvgTime:   0.1012
+    StdevTime:   0.0020
+  Timer:   force
+    MinRank: 2
+    MinTime:   0.0825
+    MaxRank: 3
+    MaxTime:   0.0866
+    AvgTime:   0.0840
+    StdevTime:   0.0013
+  Timer:     eamHalo
+    MinRank: 2
+    MinTime:   0.0817
+    MaxRank: 3
+    MaxTime:   0.0859
+    AvgTime:   0.0832
+    StdevTime:   0.0013
+  Timer: commHalo
+    MinRank: 2
+    MinTime:   0.0755
+    MaxRank: 0
+    MaxTime:   0.0820
+    AvgTime:   0.0779
+    StdevTime:   0.0021
+  Timer: commReduce
+    MinRank: 0
+    MinTime:   0.0575
+    MaxRank: 1
+    MaxTime:   0.0580
+    AvgTime:   0.0577
+    StdevTime:   0.0002
+Performance Global Update Rates:
+  AtomUpdateRate:
+    AverageRate:   0.07
+    Units: us/atom/task
+  AllAtomUpdateRate:
+    AverageRate:   0.01
+    Units: us/atom
+  AtomRate:
+    AverageRate: 111.89
+    Units: atoms/us
+
