@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-Strong-scaling plot for collective timers (commHalo, commReduce)
+Strong-scaling plot for collective timer (commReduce)
 comparing cuda-mpi, cuda-nccl-mpi, sycl-occl variants.
 
-Extracts AvgTime and StdevTime from the "Performance Results Across Ranks"
-section of each CoMD YAML output file.
+Scientific note:
+For collectives, the step completion is limited by the slowest rank, so the
+main curve uses MaxTime across ranks. The shaded band shows MinTime..MaxTime
+across ranks to expose rank imbalance.
 """
 
 import re
@@ -37,10 +39,9 @@ VARIANT_MARKER = {
     "sycl-occl": "^",
 }
 
-TIMERS = ["commHalo", "commReduce"]
+TIMERS = ["commReduce"]
 
 TIMER_TITLE = {
-    "commHalo": "commHalo  (halo send/receive)",
     "commReduce": "commReduce  (global reductions)",
 }
 
@@ -60,7 +61,6 @@ def parse_yaml(path):
     Returns a dict:
       {
         "nranks": int,
-        "commHalo":   {"avg": float, "min": float, "max": float, "stdev": float},
         "commReduce": {"avg": float, "min": float, "max": float, "stdev": float},
       }
     or None on parse error.
@@ -126,79 +126,74 @@ for path in sorted(files):
     data[variant][parsed["nranks"]].append(parsed)
     print(
         f"  {variant:20s}  ranks={parsed['nranks']:3d}  "
-        f"commHalo={parsed['commHalo']['avg']:.4f}s  "
         f"commReduce={parsed['commReduce']['avg']:.4f}s"
     )
 
 
 def summarise(runs, timer):
     """Average over multiple runs at the same (variant, nranks) point."""
+    mins = [run[timer]["min"] for run in runs if run[timer] is not None]
     avgs = [run[timer]["avg"] for run in runs if run[timer] is not None]
-    stdevs = [run[timer]["stdev"] for run in runs if run[timer] is not None]
+    maxs = [run[timer]["max"] for run in runs if run[timer] is not None]
     if not avgs:
-        return float("nan"), float("nan")
-    return np.mean(avgs), np.mean(stdevs)  # stdev: mean of per-run stdevs
+        return float("nan"), float("nan"), float("nan")
+    return np.mean(mins), np.mean(avgs), np.mean(maxs)
 
 
 # plot
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=False)
+timer = "commReduce"
+fig, ax = plt.subplots(1, 1, figsize=(7, 5), sharey=False)
 fig.suptitle(
-    "CoMD strong-scaling — collective timers (Across Ranks AvgTime +- StdevTime)",
+    "CoMD strong-scaling — commReduce "
+    "(line: Across-Ranks MaxTime, band: MinTime..MaxTime)",
     fontsize=13,
     fontweight="bold",
 )
 
-for ax, timer in zip(axes, TIMERS):
-    for variant in sorted(VARIANT_LABEL.keys()):
-        if variant not in data:
-            continue
-        nranks_sorted = sorted(data[variant].keys())
-        xs, ys, errs = [], [], []
-        for nranks in nranks_sorted:
-            avg, stdev = summarise(data[variant][nranks], timer)
-            xs.append(nranks)
-            ys.append(avg)
-            errs.append(stdev)
+for variant in sorted(VARIANT_LABEL.keys()):
+    if variant not in data:
+        continue
+    nranks_sorted = sorted(data[variant].keys())
+    xs, ys_max, ys_min, ys_avg = [], [], [], []
+    for nranks in nranks_sorted:
+        min_time, avg_time, max_time = summarise(data[variant][nranks], timer)
+        xs.append(nranks)
+        ys_min.append(min_time)
+        ys_avg.append(avg_time)
+        ys_max.append(max_time)
 
-        xs = np.array(xs)
-        ys = np.array(ys)
-        errs = np.array(errs)
+    xs = np.array(xs)
+    ys_min = np.array(ys_min)
+    ys_avg = np.array(ys_avg)
+    ys_max = np.array(ys_max)
 
-        label = VARIANT_LABEL[variant]
-        color = VARIANT_COLOR[variant]
-        marker = VARIANT_MARKER[variant]
+    label = VARIANT_LABEL[variant]
+    color = VARIANT_COLOR[variant]
+    marker = VARIANT_MARKER[variant]
 
-        ax.plot(
-            xs,
-            ys,
-            marker=marker,
-            color=color,
-            linewidth=1.8,
-            markersize=7,
-            label=label,
-            zorder=3,
-        )
-        ax.fill_between(xs, ys - errs, ys + errs, color=color, alpha=0.18, zorder=2)
-        ax.errorbar(
-            xs,
-            ys,
-            yerr=errs,
-            fmt="none",
-            ecolor=color,
-            elinewidth=1.2,
-            capsize=4,
-            zorder=4,
-        )
+    ax.plot(
+        xs,
+        ys_max,
+        marker=marker,
+        color=color,
+        linewidth=1.8,
+        markersize=7,
+        label=label,
+        zorder=3,
+    )
+    ax.fill_between(xs, ys_min, ys_max, color=color, alpha=0.18, zorder=2)
+    ax.plot(xs, ys_avg, linestyle="--", color=color, linewidth=1.0, alpha=0.9, zorder=4)
 
-    ax.set_title(TIMER_TITLE[timer], fontsize=11)
-    ax.set_xlabel("Number of MPI ranks", fontsize=10)
-    ax.set_ylabel("Time [s]", fontsize=10)
-    ax.set_xticks(sorted({nranks for variant_data in data.values() for nranks in variant_data}))
-    ax.xaxis.set_major_formatter(plt.ScalarFormatter())
-    ax.set_xscale("log", base=2)
-    ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.5)
-    ax.legend(fontsize=10)
+ax.set_title(TIMER_TITLE[timer], fontsize=11)
+ax.set_xlabel("Number of MPI ranks", fontsize=10)
+ax.set_ylabel("Time [s]", fontsize=10)
+ax.set_xticks(sorted({nranks for variant_data in data.values() for nranks in variant_data}))
+ax.xaxis.set_major_formatter(plt.ScalarFormatter())
+ax.set_xscale("log", base=2)
+ax.set_ylim(bottom=0.0)
+ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.5)
+ax.legend(fontsize=10)
 
 plt.tight_layout()
 out_path = os.path.join(yaml_dir, "collectives_strong_scaling.pdf")
