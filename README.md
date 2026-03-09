@@ -54,8 +54,6 @@ The `src-occl` implementation requires:
 - A DPC++ compiler with NVIDIA `nvptx64-nvidia-cuda` target support, exposed through `DPCPP_HOME`.
 - An Intel oneCCL installation, exposed through `ONECCL_INSTALL`.
 - The MPI bundled with oneCCL, typically exposed through `MPI_HOME`.
-- NCCL for the oneCCL backend, exposed through `NCCL_ROOT`.
-- A CUDA toolkit for CUDA headers and runtime libraries, exposed through `CUDA_HOME` or `CUDA_PATH`.
 
 The variable names above match the expectations in `src-occl/Makefile`.
 
