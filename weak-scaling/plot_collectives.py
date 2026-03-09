@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Weak-scaling plot for collective timers (commHalo, commReduce)
-comparing cuda-mpi, cuda-nccl-mpi, sycl-occl variants.
+Weak-scaling plot for commReduce collective timer
+comparing cuda-mpi-gpuaware, cuda-nccl-mpi, sycl-occl variants.
 
-Extracts AvgTime and StdevTime from the "Performance Results Across Ranks"
-section of each CoMD YAML output file.
+Uses MaxTime across ranks as the main metric (the collective blocks all ranks
+until the slowest finishes). The shaded band shows MinTime..MaxTime to expose
+rank imbalance.
 """
 
 import re
@@ -16,30 +17,48 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+plt.rcParams.update({
+    "font.size":          70,
+    "axes.labelsize":     76,
+    "xtick.labelsize":    66,
+    "ytick.labelsize":    66,
+    "legend.fontsize":    66,
+    "xtick.major.pad":    16,
+    "ytick.major.pad":    16,
+    "xtick.major.size":   16,
+    "ytick.major.size":   16,
+    "xtick.major.width":   3,
+    "ytick.major.width":   3,
+    "axes.linewidth":      3,
+    "axes.labelpad":      20,
+    "legend.framealpha":  0.9,
+    "lines.linewidth":     6,
+    "lines.markersize":   28,
+})
+
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 VARIANT_LABEL = {
-    "cuda-mpi":      "MPI",
+    "cuda-mpi-gpuaware": "MPI (GPU-Aware)",
     "cuda-nccl-mpi": "NCCL",
     "sycl-occl":     "oneCCL",
 }
 
 VARIANT_COLOR = {
-    "cuda-mpi":      "#1f77b4",   # blue
-    "cuda-nccl-mpi": "#d62728",   # red
-    "sycl-occl":     "#2ca02c",   # green
+    "cuda-mpi-gpuaware": "#9467bd",   # blue
+    "cuda-nccl-mpi": "#2ca02c",   # red
+    "sycl-occl":     "#1f77b4",   # green
 }
 
 VARIANT_MARKER = {
-    "cuda-mpi":      "o",
+    "cuda-mpi-gpuaware": "o",
     "cuda-nccl-mpi": "s",
     "sycl-occl":     "^",
 }
 
-TIMERS = ["commHalo", "commReduce"]
+TIMERS = ["commReduce"]
 
 TIMER_TITLE = {
-    "commHalo":   "commHalo  (halo send/receive)",
     "commReduce": "commReduce  (global reductions)",
 }
 
@@ -59,7 +78,6 @@ def parse_yaml(path):
     Returns a dict:
       {
         "nranks": int,
-        "commHalo":   {"avg": float, "min": float, "max": float, "stdev": float},
         "commReduce": {"avg": float, "min": float, "max": float, "stdev": float},
       }
     or None on parse error.
@@ -124,63 +142,60 @@ for path in sorted(files):
         continue
     data[variant][parsed["nranks"]].append(parsed)
     print(f"  {variant:20s}  ranks={parsed['nranks']:3d}  "
-          f"commHalo={parsed['commHalo']['avg']:.4f}s  "
-          f"commReduce={parsed['commReduce']['avg']:.4f}s")
+          f"commReduce max={parsed['commReduce']['max']:.4f}s")
 
-# For each (variant, nranks) average across repeated runs (if any)
 def summarise(runs, timer):
-    """Average over multiple runs at the same (variant, nranks) point."""
+    """Median over multiple runs at the same (variant, nranks) point."""
+    mins = [r[timer]["min"] for r in runs if r[timer] is not None]
     avgs = [r[timer]["avg"] for r in runs if r[timer] is not None]
-    stdevs = [r[timer]["stdev"] for r in runs if r[timer] is not None]
+    maxs = [r[timer]["max"] for r in runs if r[timer] is not None]
     if not avgs:
-        return float("nan"), float("nan")
-    return np.mean(avgs), np.mean(stdevs)   # stdev: mean of per-run stdevs
+        return float("nan"), float("nan"), float("nan")
+    return np.median(mins), np.median(avgs), np.median(maxs)
 
 
 # ── plot ───────────────────────────────────────────────────────────────────────
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=False)
-fig.suptitle("CoMD weak-scaling — collective timers (Across Ranks AvgTime ± StdevTime)",
-             fontsize=13, fontweight="bold")
+timer = "commReduce"
+fig, ax = plt.subplots(1, 1, figsize=(40, 20))
 
-for ax, timer in zip(axes, TIMERS):
-    for variant in sorted(VARIANT_LABEL.keys()):
-        if variant not in data:
-            continue
-        nranks_sorted = sorted(data[variant].keys())
-        xs, ys, errs = [], [], []
-        for nr in nranks_sorted:
-            avg, stdev = summarise(data[variant][nr], timer)
-            xs.append(nr)
-            ys.append(avg)
-            errs.append(stdev)
+for variant in sorted(VARIANT_LABEL.keys()):
+    if variant not in data:
+        continue
+    nranks_sorted = sorted(data[variant].keys())
+    xs, ys_min, ys_avg, ys_max = [], [], [], []
+    for nr in nranks_sorted:
+        min_t, avg_t, max_t = summarise(data[variant][nr], timer)
+        xs.append(nr)
+        ys_min.append(min_t)
+        ys_avg.append(avg_t)
+        ys_max.append(max_t)
 
-        xs = np.array(xs)
-        ys = np.array(ys)
-        errs = np.array(errs)
+    xs = np.array(xs)
+    ys_min = np.array(ys_min)
+    ys_avg = np.array(ys_avg)
+    ys_max = np.array(ys_max)
 
-        label = VARIANT_LABEL[variant]
-        color = VARIANT_COLOR[variant]
-        marker = VARIANT_MARKER[variant]
+    label = VARIANT_LABEL[variant]
+    color = VARIANT_COLOR[variant]
+    marker = VARIANT_MARKER[variant]
 
-        ax.plot(xs, ys, marker=marker, color=color, linewidth=1.8,
-                markersize=7, label=label, zorder=3)
-        ax.fill_between(xs, ys - errs, ys + errs,
-                        color=color, alpha=0.18, zorder=2)
-        ax.errorbar(xs, ys, yerr=errs, fmt="none",
-                    ecolor=color, elinewidth=1.2, capsize=4, zorder=4)
+    ax.plot(xs, ys_max, marker=marker, color=color, label=label, zorder=3)
+    ax.fill_between(xs, ys_min, ys_max, color=color, alpha=0.18, zorder=2)
+    ax.plot(xs, ys_avg, linestyle="--", color=color, linewidth=4, alpha=0.9, zorder=4)
 
-    ax.set_title(TIMER_TITLE[timer], fontsize=11)
-    ax.set_xlabel("Number of MPI ranks", fontsize=10)
-    ax.set_ylabel("Time [s]", fontsize=10)
-    ax.set_xticks(sorted({nr for v in data.values() for nr in v}))
-    ax.xaxis.set_major_formatter(plt.ScalarFormatter())
-    ax.set_xscale("log", base=2)
-    ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.5)
-    ax.legend(fontsize=10)
+ax.set_title(TIMER_TITLE[timer])
+ax.set_xlabel("Number of MPI ranks")
+ax.set_ylabel("Time [s]")
+ax.set_xticks(sorted({nr for v in data.values() for nr in v}))
+ax.xaxis.set_major_formatter(plt.ScalarFormatter())
+ax.set_xscale("log", base=2)
+ax.set_ylim(bottom=0.0)
+ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.5)
+ax.legend()
 
 plt.tight_layout()
-out_path = os.path.join(yaml_dir, "collectives_weak_scaling.pdf")
+out_path = os.path.join(yaml_dir, "commReduce_weak_scaling.pdf")
 plt.savefig(out_path, dpi=150, bbox_inches="tight")
 print(f"\nSaved: {out_path}")
 

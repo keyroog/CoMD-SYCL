@@ -19,22 +19,41 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+plt.rcParams.update({
+    "font.size":          70,
+    "axes.labelsize":     76,
+    "xtick.labelsize":    66,
+    "ytick.labelsize":    66,
+    "legend.fontsize":    66,
+    "xtick.major.pad":    16,
+    "ytick.major.pad":    16,
+    "xtick.major.size":   16,
+    "ytick.major.size":   16,
+    "xtick.major.width":   3,
+    "ytick.major.width":   3,
+    "axes.linewidth":      3,
+    "axes.labelpad":      20,
+    "legend.framealpha":  0.9,
+    "lines.linewidth":     6,
+    "lines.markersize":   28,
+})
+
 # helpers
 
 VARIANT_LABEL = {
-    "cuda-mpi": "MPI",
+    "cuda-mpi-gpuaware": "MPI (GPU-Aware)",
     "cuda-nccl-mpi": "NCCL",
     "sycl-occl": "oneCCL",
 }
 
 VARIANT_COLOR = {
-    "cuda-mpi": "#1f77b4",  # blue
-    "cuda-nccl-mpi": "#d62728",  # red
-    "sycl-occl": "#2ca02c",  # green
+    "cuda-mpi-gpuaware": "#9467bd",   # blue
+    "cuda-nccl-mpi": "#2ca02c",   # red
+    "sycl-occl":     "#1f77b4",   # green
 }
 
 VARIANT_MARKER = {
-    "cuda-mpi": "o",
+    "cuda-mpi-gpuaware": "o",
     "cuda-nccl-mpi": "s",
     "sycl-occl": "^",
 }
@@ -126,30 +145,24 @@ for path in sorted(files):
     data[variant][parsed["nranks"]].append(parsed)
     print(
         f"  {variant:20s}  ranks={parsed['nranks']:3d}  "
-        f"commReduce={parsed['commReduce']['avg']:.4f}s"
+        f"commReduce max={parsed['commReduce']['max']:.4f}s"
     )
 
 
 def summarise(runs, timer):
-    """Average over multiple runs at the same (variant, nranks) point."""
+    """Median over multiple runs at the same (variant, nranks) point."""
     mins = [run[timer]["min"] for run in runs if run[timer] is not None]
     avgs = [run[timer]["avg"] for run in runs if run[timer] is not None]
     maxs = [run[timer]["max"] for run in runs if run[timer] is not None]
     if not avgs:
         return float("nan"), float("nan"), float("nan")
-    return np.mean(mins), np.mean(avgs), np.mean(maxs)
+    return np.median(mins), np.median(avgs), np.median(maxs)
 
 
 # plot
 
 timer = "commReduce"
-fig, ax = plt.subplots(1, 1, figsize=(7, 5), sharey=False)
-fig.suptitle(
-    "CoMD strong-scaling — commReduce "
-    "(line: Across-Ranks MaxTime, band: MinTime..MaxTime)",
-    fontsize=13,
-    fontweight="bold",
-)
+fig, ax = plt.subplots(1, 1, figsize=(40, 20))
 
 for variant in sorted(VARIANT_LABEL.keys()):
     if variant not in data:
@@ -172,31 +185,22 @@ for variant in sorted(VARIANT_LABEL.keys()):
     color = VARIANT_COLOR[variant]
     marker = VARIANT_MARKER[variant]
 
-    ax.plot(
-        xs,
-        ys_max,
-        marker=marker,
-        color=color,
-        linewidth=1.8,
-        markersize=7,
-        label=label,
-        zorder=3,
-    )
+    ax.plot(xs, ys_max, marker=marker, color=color, label=label, zorder=3)
     ax.fill_between(xs, ys_min, ys_max, color=color, alpha=0.18, zorder=2)
-    ax.plot(xs, ys_avg, linestyle="--", color=color, linewidth=1.0, alpha=0.9, zorder=4)
+    ax.plot(xs, ys_avg, linestyle="--", color=color, linewidth=4, alpha=0.9, zorder=4)
 
-ax.set_title(TIMER_TITLE[timer], fontsize=11)
-ax.set_xlabel("Number of MPI ranks", fontsize=10)
-ax.set_ylabel("Time [s]", fontsize=10)
+ax.set_title(TIMER_TITLE[timer])
+ax.set_xlabel("Number of MPI ranks")
+ax.set_ylabel("Time [s]")
 ax.set_xticks(sorted({nranks for variant_data in data.values() for nranks in variant_data}))
 ax.xaxis.set_major_formatter(plt.ScalarFormatter())
 ax.set_xscale("log", base=2)
 ax.set_ylim(bottom=0.0)
 ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.5)
-ax.legend(fontsize=10)
+ax.legend()
 
 plt.tight_layout()
-out_path = os.path.join(yaml_dir, "collectives_strong_scaling.pdf")
+out_path = os.path.join(yaml_dir, "commReduce_strong_scaling.pdf")
 plt.savefig(out_path, dpi=150, bbox_inches="tight")
 print(f"\nSaved: {out_path}")
 
