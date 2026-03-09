@@ -119,6 +119,6 @@ Useful flags:
 This repository builds on two layers of prior work:
 
 - CoMD, the molecular dynamics mini-application from ExMatEx: https://github.com/exmatex/CoMD
-- A CoMD-CUDA code base used here as the starting point for the distributed GPU implementations
+- A CoMD-CUDA code base used here as the starting point for the distributed GPU implementations https://github.com/NVIDIA/CoMD-CUDA/tree/master
 
 The `src-occl` tree was generated from the CUDA version with Intel SYCLomatic (`dpct`) and then refined manually to make the SYCL/DPC++ and oneCCL version usable for the communication experiments in this repository.
