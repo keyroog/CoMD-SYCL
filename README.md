@@ -34,9 +34,7 @@ Notes:
 - `src-openmp/`, `src-serial/`: inherited CPU reference versions.
 - `pots/`: potential files used by CoMD.
 - `examples/`: legacy example scripts and input assets inherited from the original code base.
-- `leonardo/`: SLURM launch scripts and plotting utilities used for Leonardo benchmark campaigns.
 - `strong-scaling-results/`, `weak-scaling-results/`: collected YAML outputs and generated plots from scaling experiments.
-- `bin/`: build outputs for the compiled executables.
 
 ## Requirements
 
