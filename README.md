@@ -88,8 +88,6 @@ For the SYCL + oneCCL build, a typical environment setup looks like:
 export DPCPP_HOME=$HOME/dpcpp-cuda
 export ONECCL_INSTALL=$HOME/oneccl-install
 export MPI_HOME=$ONECCL_INSTALL/opt/mpi
-export NCCL_ROOT=$HOME/nccl/build
-export CUDA_HOME=${CUDA_PATH:-/usr/local/cuda}
 
 cd src-occl
 make
